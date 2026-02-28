@@ -13,7 +13,6 @@ import * as bcryptjs from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
 import { User } from '../../entities/user.entity';
-import { Tenant } from '../../entities/tenant.entity';
 import { Subscription } from '../../entities/subscription.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
@@ -42,17 +41,14 @@ export class AuthService {
   private readonly accessExpires: number;
   private readonly refreshExpires: number;
   private readonly allowedAudiences: string[];
-  private readonly jwtIssuer: string;
   private readonly jwtKid: string;
   private readonly isProduction: boolean;
 
   constructor(
-    @Inject('JWT_PRIVATE_KEY') private readonly privateKey: string,
     @Inject('JWT_PUBLIC_KEY') private readonly publicKey: string,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-    @InjectRepository(Tenant) private readonly tenantRepo: Repository<Tenant>,
     @InjectRepository(Subscription) private readonly subscriptionRepo: Repository<Subscription>,
     @InjectRepository(RefreshToken) private readonly refreshTokenRepo: Repository<RefreshToken>,
     @InjectRepository(AuditLog) private readonly auditLogRepo: Repository<AuditLog>,
@@ -60,7 +56,6 @@ export class AuthService {
     this.accessExpires = Number(process.env.JWT_ACCESS_EXPIRES ?? 900);
     this.refreshExpires = Number(process.env.JWT_REFRESH_EXPIRES ?? 604800);
     this.allowedAudiences = (process.env.ALLOWED_AUDIENCES ?? '').split(',').filter(Boolean);
-    this.jwtIssuer = process.env.JWT_ISSUER ?? 'auth.zonadev.tech';
     this.jwtKid = process.env.JWT_KID ?? 'zonadev-default';
     this.isProduction = process.env.NODE_ENV === 'production';
   }
@@ -207,7 +202,6 @@ export class AuthService {
         tenantSubdomain: user.tenant?.subdomain ?? null,
         plan: user.tenant?.plan ?? null,
         role: user.role,
-        iss: this.jwtIssuer,
         aud: dto.aud,
       },
       {
@@ -332,7 +326,6 @@ export class AuthService {
         tenantSubdomain: freshUser.tenant?.subdomain ?? null,
         plan: freshUser.tenant?.plan ?? null,
         role: freshUser.role,
-        iss: this.jwtIssuer,
         aud,
       },
       {

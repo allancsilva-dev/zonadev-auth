@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './modules/auth/auth.module';
@@ -59,6 +60,10 @@ import { AuditLog } from './entities/audit-log.entity';
     // CleanupJob precisa do RefreshToken via TypeORM
     TypeOrmModule.forFeature([RefreshToken]),
   ],
-  providers: [CleanupJob],
+  providers: [
+    CleanupJob,
+    // ThrottlerGuard aplicado globalmente — @Throttle() nos endpoints sobrescreve
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
