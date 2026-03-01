@@ -108,16 +108,15 @@ services:
     volumes:
       # Chaves RSA montadas read-only — nunca copiadas na imagem
       - ./keys:/app/keys:ro
-    ports:
-      - "3001:3001"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3001/health"]
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
     networks:
       - internal
+      - public
     logging:
       driver: "json-file"
       options:
