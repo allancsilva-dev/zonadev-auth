@@ -1,0 +1,15 @@
+node_modules
+dist
+
+# Chaves RSA — NUNCA incluir no build context Docker
+keys
+*.pem
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Logs e artefatos locais
+*.log
+coverage

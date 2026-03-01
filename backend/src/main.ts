@@ -8,6 +8,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Confia no primeiro proxy reverso (Nginx) para propagação de IP real.
+  // Necessário para req.ip e X-Forwarded-For funcionarem corretamente
+  // no rate limit do ThrottlerGuard e nos audit logs.
+  app.set('trust proxy', 1);
+
   // Cookie parser — necessário para ler cookies HTTP-only
   app.use(cookieParser());
 
@@ -15,10 +20,17 @@ async function bootstrap() {
   // NUNCA usar origin: '*' com credentials — browser rejeita
   // TODO v2.0: migrar para função dinâmica ao suportar domínios customizados por cliente
   app.enableCors({
-    origin: (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean);
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
   });
 
   // Validação global com class-validator

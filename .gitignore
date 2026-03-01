@@ -11,6 +11,8 @@
 # Chaves RSA — nunca commitar
 backend/keys/private.pem
 backend/keys/public.pem
+keys/
+*.pem
 
 # Dependências
 **/node_modules/
@@ -22,6 +24,12 @@ backend/keys/public.pem
 
 # Logs
 **/*.log
+
+# Backups gerados pelo script — armazenados localmente no VPS
+backups/
+
+# Certificados TLS gerados pelo Certbot no host
+nginx/certs/
 
 # OS
 .DS_Store

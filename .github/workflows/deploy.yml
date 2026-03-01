@@ -1,0 +1,50 @@
+name: Deploy — ZonaDev Auth
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # Timeout total da sessão SSH em segundos
+          command_timeout: 900s
+          script: |
+            set -euo pipefail
+
+            cd /opt/zonadev-auth
+
+            echo "[deploy] Pulling latest code..."
+            git pull origin main
+
+            echo "[deploy] Building images in parallel..."
+            docker compose build --parallel
+
+            echo "[deploy] Running migrations..."
+            # Falha aqui = pipeline para, containers antigos continuam rodando
+            docker compose run --rm migrate
+
+            echo "[deploy] Starting services (zero downtime — sem docker compose down)..."
+            docker compose up -d --remove-orphans
+
+            echo "[deploy] Pruning unused images..."
+            docker image prune -f
+
+            echo "[deploy] Deployment status:"
+            docker compose ps
+
+            echo "[deploy] Done."

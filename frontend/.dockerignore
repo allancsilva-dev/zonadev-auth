@@ -1,0 +1,11 @@
+node_modules
+.next
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Logs e artefatos locais
+*.log
+coverage

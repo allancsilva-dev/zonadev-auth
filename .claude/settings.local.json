@@ -4,7 +4,14 @@
       "Bash(npx tsc --noEmit)",
       "Bash(ls /d/Projetos/zonadev-auth/backend/.env*)",
       "Bash(ls /d/Projetos/zonadev-auth/frontend/.env*)",
-      "Bash(curl -s http://localhost:3000/health)"
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(curl -s -X OPTIONS http://localhost:3000/auth/login -H \"Origin: http://localhost:3001\" -H \"Access-Control-Request-Method: POST\" -H \"Access-Control-Request-Headers: Content-Type\" -v)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -H \"Origin: http://localhost:3001\" -d '{\"\"email\"\":\"\"admin@zonadev.tech\"\",\"\"password\"\":\"\"Zeroamor982310@\"\",\"\"aud\"\":\"\"zonadev-admin\"\"}' -c /tmp/zd_cookies.txt -v)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -H \"Origin: http://localhost:3001\" -d '{\"\"email\"\":\"\"admin@zonadev.tech\"\",\"\"password\"\":\"\"Zeroamor982310@\"\",\"\"aud\"\":\"\"zonadev-admin\"\"}' -c /tmp/zd_cookies.txt)",
+      "Bash(echo \"STATUS:$?\")",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -H \"Origin: http://localhost:3001\" -d '{\"\"email\"\":\"\"admin@zonadev.tech\"\",\"\"password\"\":\"\"Zeroamor982310@\"\",\"\"aud\"\":\"\"zonadev-admin\"\"}' -D -)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

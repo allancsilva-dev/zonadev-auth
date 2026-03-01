@@ -1,0 +1,195 @@
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Porta NÃO exposta no host — apenas rede internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Persistência DESABILITADA (--save ""):
+    # Restart do container invalida todas as refresh sessions, forçando novo login.
+    # Para este IdP é comportamento fail-secure aceitável.
+    # Se SLA exigir sessões sobrevivendo a reinicializações, habilitar AOF
+    # e documentar impacto em disco. Ver docs/security.md seção "Redis sem persistência".
+    command: redis-server --save "" --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # Porta NÃO exposta no host — apenas rede internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Migrate ────────────────────────────────────────────────────────────────
+  # Serviço one-shot: roda migrations e sai. Executado explicitamente:
+  #   docker compose run --rm migrate
+  # Não reinicia automaticamente (restart: "no").
+  # Exit code != 0 em falha interrompe o pipeline do CI.
+  migrate:
+    build:
+      context: ./backend
+      # Usa o stage builder (tem ts-node para executar migrations TypeScript)
+      target: builder
+    command: pnpm run migration:run
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      NODE_ENV: production
+    networks:
+      - internal
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Backend ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_PRIVATE_KEY_PATH: /app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /app/keys/public.pem
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-900}
+      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-604800}
+      JWT_KID: ${JWT_KID:-zonadev-default}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      ALLOWED_AUDIENCES: ${ALLOWED_AUDIENCES}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASS: ${MAIL_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    volumes:
+      # Chaves RSA montadas read-only — nunca copiadas na imagem
+      - ./keys:/app/keys:ro
+    # Porta 3001 apenas na rede internal — não exposta no host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    networks:
+      - internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        # NEXT_PUBLIC_* são embutidas em tempo de build
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Vars server-side do Next.js (não embutidas no bundle do cliente)
+      JWT_EXPECTED_ISS: ${JWT_EXPECTED_ISS}
+      JWT_EXPECTED_AUD: ${JWT_EXPECTED_AUD}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    # Porta 3000 apenas na rede internal + public (nginx acessa)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    networks:
+      - internal
+      - public
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Nginx ───────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Certificados TLS gerados pelo Certbot no host e montados no container
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - public
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+
+# ─── Redes ───────────────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
+    # internal: true bloqueia saída para internet nesta rede
+    # postgres e redis ficam completamente isolados
+    internal: true
+  public:
+    driver: bridge
