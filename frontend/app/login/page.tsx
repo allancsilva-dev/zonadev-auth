@@ -53,8 +53,13 @@ export default function LoginPage() {
       }
 
       const data = await res.json();
-      // Redireciona para o sistema cliente após login bem-sucedido
-      window.location.href = data.redirect ?? redirect ?? '/';
+      // Caminhos relativos (ex: /admin) são tratados localmente —
+      // o backend rejeita paths relativos em isSafeRedirect() e retorna o fallback de produção.
+      // Isso garante que em dev o usuário vá para localhost:3001/admin, não para auth.zonadev.tech.
+      const target = redirect && redirect.startsWith('/')
+        ? redirect
+        : (data.redirect ?? redirect ?? '/');
+      window.location.href = target;
     } catch {
       setError('Erro de conexão. Verifique sua internet e tente novamente');
     } finally {

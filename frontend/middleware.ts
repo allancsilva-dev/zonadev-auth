@@ -20,6 +20,7 @@ export function middleware(req: NextRequest) {
 
   if (!token) {
     const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('aud', EXPECTED_AUD);
     loginUrl.searchParams.set('redirect', req.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -33,7 +34,10 @@ export function middleware(req: NextRequest) {
     !isTokenTrusted(payload, EXPECTED_ISS, EXPECTED_AUD) ||
     payload.role !== 'SUPERADMIN'
   ) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('aud', EXPECTED_AUD);
+    loginUrl.searchParams.set('redirect', req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
