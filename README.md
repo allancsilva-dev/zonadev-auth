@@ -83,7 +83,25 @@ zonadev-auth/
 - Node.js 18+
 - pnpm (`npm install -g pnpm`)
 - PostgreSQL 14+
-- Chaves RSA já geradas em `backend/keys/`
+- OpenSSL (para gerar as chaves RSA)
+
+---
+
+## Geração das Chaves RSA
+
+Execute uma vez antes do primeiro setup:
+
+```bash
+mkdir -p backend/keys
+
+# Gerar chave privada RSA 2048-bit
+openssl genrsa -out backend/keys/private.pem 2048
+
+# Extrair chave pública
+openssl rsa -in backend/keys/private.pem -pubout -out backend/keys/public.pem
+```
+
+> **Importante:** nunca commite os arquivos `.pem`. Em produção, carregue via secrets manager e configure `JWT_PRIVATE_KEY_PATH` / `JWT_PUBLIC_KEY_PATH` no `.env`.
 
 ---
 
@@ -109,6 +127,10 @@ pnpm run seed
 
 # Iniciar em desenvolvimento
 pnpm run start:dev
+
+# Build e start em produção
+pnpm run build
+pnpm run start:prod
 ```
 
 ### 2. Frontend
@@ -125,11 +147,17 @@ cp .env.local.example .env.local
 
 # Iniciar em desenvolvimento
 npm run dev
+
+# Build e start em produção
+npm run build
+npm start
 ```
 
 ---
 
-## Variáveis de Ambiente (Backend)
+## Variáveis de Ambiente
+
+### Backend (`backend/.env`)
 
 | Variável | Descrição | Exemplo |
 |---|---|---|
@@ -142,15 +170,21 @@ npm run dev
 | `JWT_ISSUER` | Emissor do JWT (claim `iss`) | `auth.zonadev.tech` |
 | `PORT` | Porta do servidor | `3000` |
 | `NODE_ENV` | Ambiente | `development` / `production` |
-| `DOMAIN` | Domínio base | `zonadev.tech` |
-| `ALLOWED_AUDIENCES` | Sistemas autorizados (separados por vírgula) | `renowa.zonadev.tech` |
-| `ALLOWED_ORIGINS` | Origens CORS | `https://renowa.zonadev.tech` |
+| `DOMAIN` | Domínio base (usado por `isSafeRedirect`) | `zonadev.tech` |
+| `ALLOWED_AUDIENCES` | Sistemas autorizados a receber tokens (claim `aud`) | `renowa.zonadev.tech` |
+| `ALLOWED_ORIGINS` | Origens permitidas no CORS | `https://renowa.zonadev.tech` |
 | `MAIL_HOST` | SMTP host | `smtp.example.com` |
 | `MAIL_PORT` | SMTP porta | `587` |
 | `MAIL_USER` | SMTP usuário | `noreply@zonadev.tech` |
 | `MAIL_PASS` | SMTP senha | — |
 | `MAIL_FROM` | Remetente padrão | `ZonaDev Auth <noreply@zonadev.tech>` |
 | `SEED_ADMIN_PASSWORD` | Senha do SUPERADMIN criado no seed | — |
+
+### Frontend (`frontend/.env.local`)
+
+| Variável | Descrição | Exemplo |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | URL do backend ZonaDev Auth | `http://localhost:3000` |
 
 ---
 
@@ -235,7 +269,7 @@ Emails são únicos globalmente na plataforma (não por tenant). Um mesmo email 
 3. Ajustar login para receber tenant como critério de busca
 
 ### CORS estático (v1.0)
-Origens configuradas via `ALLOWED_AUDIENCES` env var como lista estática.
+Origens CORS configuradas via `ALLOWED_ORIGINS` env var como lista estática separada por vírgula.
 
 **v2.0:** Migrar para função dinâmica consultando tabela `applications` para suporte a domínios customizados (white-label).
 
@@ -243,6 +277,35 @@ Origens configuradas via `ALLOWED_AUDIENCES` env var como lista estática.
 Audiências configuradas via `ALLOWED_AUDIENCES`. Cada token carrega o `aud` do sistema cliente.
 
 **v2.0:** Migrar para tabela `applications` com `domain`, `active`, `name`.
+
+---
+
+## Audit Log
+
+Todas as ações sensíveis são registradas na tabela `audit_logs` com IP, user-agent, tenant e usuário.
+
+| Evento | Quando ocorre |
+|---|---|
+| `LOGIN_SUCCESS` | Login bem-sucedido |
+| `LOGIN_FAILED` | Senha incorreta |
+| `LOGIN_BLOCKED_EMAIL_NOT_VERIFIED` | E-mail ainda não verificado |
+| `LOGOUT` | Logout explícito |
+| `TOKEN_REFRESHED` | Refresh token usado com sucesso |
+| `TOKEN_REUSE_DETECTED` | Refresh token já revogado reusado — todas as sessões do usuário são encerradas |
+| `LICENSE_EXPIRED` | Tentativa de login com subscription expirada |
+| `PASSWORD_RESET` | Senha redefinida com sucesso |
+
+---
+
+## Cleanup Job
+
+Um job agendado remove diariamente da tabela `refresh_tokens` os registros obsoletos para manter a performance das queries.
+
+| Propriedade | Valor |
+|---|---|
+| Schedule | `0 2 * * *` (todo dia às 02:00) |
+| Remove | tokens revogados (`revoked_at IS NOT NULL`) |
+| Remove | tokens expirados (`expires_at < now()`) |
 
 ---
 
