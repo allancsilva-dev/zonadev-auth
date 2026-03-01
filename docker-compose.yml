@@ -108,7 +108,8 @@ services:
     volumes:
       # Chaves RSA montadas read-only — nunca copiadas na imagem
       - ./keys:/app/keys:ro
-    # Porta 3001 apenas na rede internal — não exposta no host
+    ports:
+      - "3001:3001"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 30s
@@ -141,7 +142,8 @@ services:
       JWT_EXPECTED_ISS: ${JWT_EXPECTED_ISS}
       JWT_EXPECTED_AUD: ${JWT_EXPECTED_AUD}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-    # Porta 3000 apenas na rede internal + public (nginx acessa)
+    ports:
+      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
       interval: 30s
@@ -157,27 +159,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ─── Nginx ───────────────────────────────────────────────────────────────────
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # Certificados TLS gerados pelo Certbot no host e montados no container
-      - ./nginx/certs:/etc/nginx/certs:ro
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - public
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 # ─── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
