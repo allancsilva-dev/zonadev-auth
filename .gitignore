@@ -1,0 +1,28 @@
+# Variáveis de ambiente — nunca commitar
+# **/ garante cobertura em qualquer subpasta (backend/, frontend/, etc.)
+**/.env
+**/.env.local
+**/.env.production
+**/.env.*.local
+
+# Arquivos de documentação (.env.example) devem ser commitados
+!**/.env.example
+
+# Chaves RSA — nunca commitar
+backend/keys/private.pem
+backend/keys/public.pem
+
+# Dependências
+**/node_modules/
+
+# Build
+**/.next/
+**/dist/
+**/build/
+
+# Logs
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(ls /d/Projetos/zonadev-auth/backend/.env*)",
+      "Bash(ls /d/Projetos/zonadev-auth/frontend/.env*)"
     ]
   }
 }

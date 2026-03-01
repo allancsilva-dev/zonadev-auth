@@ -141,9 +141,9 @@ cd frontend
 # Instalar dependências
 npm install
 
-# Configurar variável de ambiente
-cp .env.local.example .env.local
-# Editar NEXT_PUBLIC_API_URL
+# Configurar variáveis de ambiente
+cp .env.example .env.local
+# Editar NEXT_PUBLIC_API_URL se necessário
 
 # Iniciar em desenvolvimento
 npm run dev
@@ -156,6 +156,50 @@ npm start
 ---
 
 ## Variáveis de Ambiente
+
+### Estrutura
+
+| Arquivo | Quando é carregado | Commitar? |
+|---|---|---|
+| `backend/.env` | `pnpm run start:dev` | ❌ Nunca |
+| `backend/.env.production` | Deploy na Hostinger | ❌ Nunca |
+| `backend/.env.example` | Documentação | ✅ Sempre |
+| `frontend/.env.local` | `npm run dev` | ❌ Nunca |
+| `frontend/.env.production` | `npm run build` | ❌ Nunca |
+| `frontend/.env.example` | Documentação | ✅ Sempre |
+
+### Setup inicial
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+# Preencher os valores reais nos arquivos copiados
+```
+
+### Ordem de prioridade — Next.js 14+
+
+O Next.js carrega variáveis nesta ordem (maior prioridade primeiro):
+
+1. `.env.local` — sempre carregado, sobrescreve qualquer outro
+2. `.env.production` — carregado apenas no build (`NODE_ENV=production`)
+3. `.env` — base, carregado sempre
+
+> ⚠️ **Nunca manter `.env.local` no servidor de produção.**
+> Se existir no servidor, ele sobrescreve `.env.production` silenciosamente —
+> o `NEXT_PUBLIC_API_URL` apontaria para `localhost` em produção sem nenhum aviso.
+> O `.env.local` é exclusivo para máquina de desenvolvimento.
+
+### Variáveis server-side vs client-side (Next.js)
+
+| Prefixo | Disponível em | Aparece no bundle? |
+|---|---|---|
+| `NEXT_PUBLIC_` | Client + Server | ✅ Sim |
+| (sem prefixo) | Server apenas | ❌ Não |
+
+`JWT_EXPECTED_ISS` e `JWT_EXPECTED_AUD` não têm `NEXT_PUBLIC_` — são usadas
+apenas no middleware (Edge Runtime) e no `layout.tsx` (Server Component).
+**Nunca usar essas variáveis em Client Components** — se isso for necessário
+no futuro, adicionar `NEXT_PUBLIC_` e aceitar que irão para o bundle.
 
 ### Backend (`backend/.env`)
 
@@ -172,7 +216,7 @@ npm start
 | `NODE_ENV` | Ambiente | `development` / `production` |
 | `DOMAIN` | Domínio base (usado por `isSafeRedirect`) | `zonadev.tech` |
 | `ALLOWED_AUDIENCES` | Sistemas autorizados a receber tokens (claim `aud`) | `renowa.zonadev.tech` |
-| `ALLOWED_ORIGINS` | Origens permitidas no CORS | `https://renowa.zonadev.tech` |
+| `ALLOWED_ORIGINS` | Origens permitidas no CORS | `http://localhost:3001,https://renowa.zonadev.tech` |
 | `MAIL_HOST` | SMTP host | `smtp.example.com` |
 | `MAIL_PORT` | SMTP porta | `587` |
 | `MAIL_USER` | SMTP usuário | `noreply@zonadev.tech` |
@@ -180,11 +224,13 @@ npm start
 | `MAIL_FROM` | Remetente padrão | `ZonaDev Auth <noreply@zonadev.tech>` |
 | `SEED_ADMIN_PASSWORD` | Senha do SUPERADMIN criado no seed | — |
 
-### Frontend (`frontend/.env.local`)
+### Frontend (`frontend/.env.local` / `frontend/.env.production`)
 
-| Variável | Descrição | Exemplo |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | URL do backend ZonaDev Auth | `http://localhost:3000` |
+| Variável | Prefixo | Descrição | Dev | Prod |
+|---|---|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `NEXT_PUBLIC_` | URL do backend NestJS | `http://localhost:3000` | `https://auth.zonadev.tech` |
+| `JWT_EXPECTED_ISS` | — | Emissor esperado nos tokens JWT | `auth.zonadev.tech` | `auth.zonadev.tech` |
+| `JWT_EXPECTED_AUD` | — | Audiência esperada (painel admin) | `zonadev-admin` | `zonadev-admin` |
 
 ---
 
