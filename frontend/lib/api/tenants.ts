@@ -1,28 +1,28 @@
-import { apiRequest } from './client';
+import { apiFetchJson } from '@/lib/api';
 import { Tenant, CreateTenantPayload, UpdateTenantPayload } from '@/types/tenant';
 
 export function getTenants(): Promise<Tenant[]> {
-  return apiRequest<Tenant[]>('/tenants');
+  return apiFetchJson<Tenant[]>('/tenants');
 }
 
 export function getTenant(id: string): Promise<Tenant> {
-  return apiRequest<Tenant>(`/tenants/${id}`);
+  return apiFetchJson<Tenant>(`/tenants/${id}`);
 }
 
 export function createTenant(payload: CreateTenantPayload): Promise<Tenant> {
-  return apiRequest<Tenant>('/tenants', {
+  return apiFetchJson<Tenant>('/tenants', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
 export function updateTenant(id: string, payload: UpdateTenantPayload): Promise<Tenant> {
-  return apiRequest<Tenant>(`/tenants/${id}`, {
+  return apiFetchJson<Tenant>(`/tenants/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
 }
 
 export function deleteTenant(id: string): Promise<void> {
-  return apiRequest<void>(`/tenants/${id}`, { method: 'DELETE' });
+  return apiFetchJson<void>(`/tenants/${id}`, { method: 'DELETE' });
 }

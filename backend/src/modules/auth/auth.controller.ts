@@ -19,6 +19,8 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from '../../guards/jwt.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { JwtPayload } from '../../strategies/jwt.strategy';
 
 @Controller()
 export class AuthController {
@@ -82,6 +84,16 @@ export class AuthController {
     @Res() res: Response,
   ) {
     return this.authService.verifyEmail(token, res);
+  }
+
+  // ─── Me ────────────────────────────────────────────────────────────────────
+  // Sem rate limit — chamado frequentemente para verificar sessão activa
+  @Get('auth/me')
+  @UseGuards(JwtAuthGuard)
+  @SkipThrottle()
+  @HttpCode(HttpStatus.OK)
+  me(@CurrentUser() user: JwtPayload) {
+    return this.authService.getMe(user);
   }
 
   // ─── JWKS ──────────────────────────────────────────────────────────────────

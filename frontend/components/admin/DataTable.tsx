@@ -3,7 +3,7 @@ import { SkeletonRow } from './SkeletonRow';
 
 export interface Column<T> {
   key: keyof T | string;
-  label: string;
+  label: ReactNode;
   render?: (row: T) => ReactNode;
 }
 

@@ -1,50 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { decodeJwtPayload, isTokenExpired, isTokenTrusted } from '@/lib/jwt';
 
-// Lidos no módulo — sem NEXT_PUBLIC_, nunca chegam ao bundle do cliente
-const EXPECTED_ISS = process.env.JWT_EXPECTED_ISS;
-const EXPECTED_AUD = process.env.JWT_EXPECTED_AUD;
-
-export function middleware(req: NextRequest) {
-  if (!req.nextUrl.pathname.startsWith('/admin')) {
+export function middleware(request: NextRequest) {
+  if (!request.nextUrl.pathname.startsWith('/admin')) {
     return NextResponse.next();
   }
 
-  // Guard — undefined === payload.iss passaria silenciosamente em env mal configurada
-  if (!EXPECTED_ISS || !EXPECTED_AUD) {
-    console.error('[middleware] JWT_EXPECTED_ISS ou JWT_EXPECTED_AUD não configurados.');
-    return NextResponse.redirect(new URL('/login', req.url));
-  }
+  const accessToken  = request.cookies.get('access_token');
+  const refreshToken = request.cookies.get('refresh_token');
 
-  const token = req.cookies.get('access_token')?.value;
-
-  if (!token) {
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('aud', EXPECTED_AUD);
-    loginUrl.searchParams.set('redirect', req.nextUrl.pathname);
+  // Se não há nenhum token, redirigir para login com contexto
+  if (!accessToken && !refreshToken) {
+    const loginUrl = new URL('/login', request.url);
+    const expectedAud = process.env.JWT_EXPECTED_AUD;
+    if (expectedAud) loginUrl.searchParams.set('aud', expectedAud);
+    loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  const payload = decodeJwtPayload(token);
-
-  // Validação em cascata — falha no primeiro critério inválido
-  if (
-    !payload ||
-    isTokenExpired(payload) ||
-    !isTokenTrusted(payload, EXPECTED_ISS, EXPECTED_AUD) ||
-    payload.role !== 'SUPERADMIN'
-  ) {
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('aud', EXPECTED_AUD);
-    loginUrl.searchParams.set('redirect', req.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
+  // Se o access token expirou mas ainda há refresh token, deixa passar —
+  // o layout.tsx faz a validação completa e o silent refresh trata o resto.
   return NextResponse.next();
 }
 
 export const config = {
-  // Compatível com futura migração para admin.zonadev.tech:
-  // basta ajustar matcher para '/:path*' e configurar DNS/rewrites
   matcher: ['/admin/:path*'],
 };

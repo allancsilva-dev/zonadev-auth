@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Body, Param, UseGuards,
+  Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
@@ -19,6 +19,22 @@ export class TenantsController {
 
   @Get(':id')
   findOne(@Param('id') id: string) { return this.tenantsService.findOne(id); }
+
+  @Get(':id/users')
+  findUsers(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('sort') sort?: string,
+  ) {
+    return this.tenantsService.findUsers(id, {
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      sort,
+    });
+  }
 
   @Post()
   create(@Body() dto: CreateTenantDto) { return this.tenantsService.create(dto); }

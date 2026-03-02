@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../entities/tenant.entity';
+import { User } from '../../entities/user.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 
 @Injectable()
@@ -9,6 +10,8 @@ export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   async findAll(): Promise<Tenant[]> {
@@ -23,6 +26,35 @@ export class TenantsService {
 
   async findBySubdomain(subdomain: string): Promise<Tenant | null> {
     return this.tenantRepo.findOne({ where: { subdomain } });
+  }
+
+  async findUsers(
+    tenantId: string,
+    query?: { page?: number; limit?: number; search?: string; sort?: string },
+  ) {
+    await this.findOne(tenantId); // valida existência
+
+    const page = Math.max(1, query?.page ?? 1);
+    const pageSize = Math.min(Math.max(1, query?.limit ?? 25), 100);
+    const skip = (page - 1) * pageSize;
+
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .where('u.tenantId = :tenantId', { tenantId });
+
+    if (query?.search) {
+      qb.andWhere('u.email ILIKE :search', { search: `%${query.search}%` });
+    }
+
+    const [rawField, rawDir] = (query?.sort ?? 'createdAt:desc').split(':');
+    const field = ['createdAt', 'email', 'role'].includes(rawField) ? rawField : 'createdAt';
+    const dir = rawDir === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy(`u.${field}`, dir);
+
+    const [users, total] = await qb.skip(skip).take(pageSize).getManyAndCount();
+    const data = users.map(({ passwordHash: _, ...u }) => u);
+
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   async create(dto: CreateTenantDto): Promise<Tenant> {

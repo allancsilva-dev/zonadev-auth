@@ -12,6 +12,24 @@ import { Role } from '../../common/enums/role.enum';
 import { CreateUserDto } from './dto/create-user.dto';
 
 const BCRYPT_ROUNDS = 12;
+const ALLOWED_SORT_FIELDS = ['createdAt', 'email', 'role'] as const;
+
+export interface UserListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: Role;
+  active?: boolean;
+  sort?: string; // field:direction
+}
+
+export interface PaginatedUsers {
+  data: Omit<User, 'passwordHash'>[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 @Injectable()
 export class UsersService {
@@ -20,14 +38,54 @@ export class UsersService {
     private readonly userRepo: Repository<User>,
   ) {}
 
-  async findAll(tenantId?: string): Promise<Omit<User, 'passwordHash'>[]> {
-    const where = tenantId ? { tenantId } : {};
-    const users = await this.userRepo.find({ where, order: { createdAt: 'DESC' } });
-    return users.map(({ passwordHash, ...u }) => u as any);
+  async findAll(tenantId?: string, query?: UserListQuery): Promise<PaginatedUsers> {
+    const page = Math.max(1, query?.page ?? 1);
+    const pageSize = Math.min(Math.max(1, query?.limit ?? 25), 100);
+    const skip = (page - 1) * pageSize;
+
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.tenant', 'tenant');
+
+    if (tenantId) {
+      qb.andWhere('u.tenantId = :tenantId', { tenantId });
+    }
+
+    if (query?.search) {
+      qb.andWhere('u.email ILIKE :search', { search: `%${query.search}%` });
+    }
+
+    if (query?.role) {
+      qb.andWhere('u.role = :role', { role: query.role });
+    }
+
+    if (query?.active !== undefined) {
+      qb.andWhere('u.active = :active', { active: query.active });
+    }
+
+    // Sort seguro — whitelist de campos permitidos
+    const [rawField, rawDir] = (query?.sort ?? 'createdAt:desc').split(':');
+    const field = (ALLOWED_SORT_FIELDS as readonly string[]).includes(rawField)
+      ? rawField
+      : 'createdAt';
+    const dir = rawDir === 'asc' ? 'ASC' : 'DESC';
+    qb.orderBy(`u.${field}`, dir);
+
+    const [users, total] = await qb.skip(skip).take(pageSize).getManyAndCount();
+
+    const data = users.map(({ passwordHash: _, ...u }) => u as Omit<User, 'passwordHash'>);
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async findOne(id: string): Promise<User> {
-    const user = await this.userRepo.findOne({ where: { id } });
+    const user = await this.userRepo.findOne({ where: { id }, relations: ['tenant'] });
     if (!user) throw new NotFoundException('Usuário não encontrado');
     return user;
   }

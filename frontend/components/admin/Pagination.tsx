@@ -6,9 +6,11 @@ interface PaginationProps {
   total: number;
   page: number;
   limit: number;
+  /** Se fornecido, chama o callback em vez de alterar a URL */
+  onPageChange?: (page: number) => void;
 }
 
-export function Pagination({ total, page, limit }: PaginationProps) {
+export function Pagination({ total, page, limit, onPageChange }: PaginationProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -17,6 +19,10 @@ export function Pagination({ total, page, limit }: PaginationProps) {
   if (totalPages <= 1) return null;
 
   function goToPage(p: number) {
+    if (onPageChange) {
+      onPageChange(p);
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', String(p));
     router.push(`${pathname}?${params.toString()}`);
@@ -31,7 +37,7 @@ export function Pagination({ total, page, limit }: PaginationProps) {
         <button
           onClick={() => goToPage(page - 1)}
           disabled={page <= 1}
-          className="px-3 py-1.5 text-sm rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 text-sm rounded bg-[#1a1a1a] border border-[#2a2a2a] text-slate-300 hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Anterior
         </button>
@@ -44,7 +50,7 @@ export function Pagination({ total, page, limit }: PaginationProps) {
               className={`px-3 py-1.5 text-sm rounded transition-colors ${
                 p === page
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  : 'bg-[#1a1a1a] border border-[#2a2a2a] text-slate-300 hover:bg-[#2a2a2a]'
               }`}
             >
               {p}
@@ -54,7 +60,7 @@ export function Pagination({ total, page, limit }: PaginationProps) {
         <button
           onClick={() => goToPage(page + 1)}
           disabled={page >= totalPages}
-          className="px-3 py-1.5 text-sm rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 text-sm rounded bg-[#1a1a1a] border border-[#2a2a2a] text-slate-300 hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Próxima
         </button>

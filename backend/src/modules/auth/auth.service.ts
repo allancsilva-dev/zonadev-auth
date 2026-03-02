@@ -60,6 +60,18 @@ export class AuthService {
     this.isProduction = process.env.NODE_ENV === 'production';
   }
 
+  // ─── Me ────────────────────────────────────────────────────────────────────
+
+  getMe(user: import('../../strategies/jwt.strategy').JwtPayload) {
+    return {
+      sub: user.sub,
+      role: user.role,
+      tenantId: user.tenantId,
+      tenantSubdomain: user.tenantSubdomain,
+      plan: user.plan,
+    };
+  }
+
   // ─── Cookie Options ────────────────────────────────────────────────────────
 
   private getCookieOptions(maxAgeMs: number) {

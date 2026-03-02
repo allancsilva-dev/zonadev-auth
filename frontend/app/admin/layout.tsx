@@ -1,58 +1,48 @@
-// Server Component — dupla validação completa (defesa em profundidade)
-import { cookies } from 'next/headers';
+// Server Component — força re-render a cada request (dados de sessão nunca cacheados)
+export const dynamic = 'force-dynamic';
+
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { decodeJwtPayload, isTokenExpired, isTokenTrusted } from '@/lib/jwt';
+import { getMe } from '@/lib/auth';
+import { getRedirectByRole } from '@/lib/routeGuard';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/components/admin/Toast';
 import Sidebar from '@/components/admin/Sidebar';
+import Topbar from '@/components/admin/Topbar';
 
 export const metadata: Metadata = {
   title: 'ZonaDev Admin',
-  robots: { index: false, follow: false }, // bloqueia indexação acidental
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('access_token')?.value;
+  const user = await getMe();
 
-  if (!token) redirect('/login');
+  if (!user) redirect('/login');
 
-  const payload = decodeJwtPayload(token);
-
-  // Lidos sem `!` — falhar controladamente é melhor que crashar em runtime
-  const expectedIss = process.env.JWT_EXPECTED_ISS;
-  const expectedAud = process.env.JWT_EXPECTED_AUD;
-
-  // Se env vars não configuradas, redireciona em vez de explodir
-  if (!expectedIss || !expectedAud) redirect('/login');
-
-  // Mesmos critérios do middleware — iss, aud, role, exp
-  if (
-    !payload ||
-    isTokenExpired(payload) ||
-    !isTokenTrusted(payload, expectedIss, expectedAud) ||
-    payload.role !== 'SUPERADMIN'
-  ) {
-    redirect('/login');
+  // Apenas SUPERADMIN e ADMIN acedem ao painel
+  if (!['SUPERADMIN', 'ADMIN'].includes(user.role)) {
+    redirect(getRedirectByRole(user.role));
   }
 
-  // Apenas claims necessários no contexto — nunca o token em si
-  const user = {
-    sub: payload.sub,
-    role: payload.role,
-    tenantId: payload.tenantId,
-    plan: payload.plan,
+  const authUser = {
+    sub: user.sub,
+    role: user.role,
+    tenantId: user.tenantId,
+    plan: user.plan,
   };
 
   return (
-    <AuthProvider initialUser={user}>
+    <AuthProvider initialUser={authUser}>
       <ToastProvider>
-        <div className="flex h-screen bg-slate-900">
+        <div className="flex h-screen bg-[#0a0a0a] dark:bg-[#0a0a0a]">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto p-8">
-            {children}
-          </main>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+              {children}
+            </main>
+          </div>
         </div>
       </ToastProvider>
     </AuthProvider>

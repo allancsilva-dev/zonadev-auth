@@ -6,6 +6,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
 import { PlansModule } from './modules/plans/plans.module';
@@ -51,6 +52,7 @@ import { AuditLog } from './entities/audit-log.entity';
 
     // Módulos de funcionalidade
     AuthModule,
+    AdminModule,
     TenantsModule,
     UsersModule,
     PlansModule,
