@@ -37,12 +37,12 @@ export default function TenantsClient() {
     queryFn: getTenants,
   });
 
-  const createForm = useForm<TenantFormData>({
+  const createForm = useForm({
     resolver: zodResolver(tenantSchema),
     defaultValues: { name: '', subdomain: '', plan: 'FREE', active: true },
   });
 
-  const editForm = useForm<TenantFormData>({
+  const editForm = useForm({
     resolver: zodResolver(tenantSchema),
   });
 

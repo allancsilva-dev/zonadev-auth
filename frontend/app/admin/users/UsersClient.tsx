@@ -12,7 +12,7 @@ import { useToast } from '@/components/admin/Toast';
 import { getUsers, createUser, deactivateUser } from '@/lib/api/users';
 import { getTenants } from '@/lib/api/tenants';
 import { queryKeys } from '@/lib/queryKeys';
-import { userSchema, UserFormData } from '@/lib/validations/user';
+import { userSchema } from '@/lib/validations/user';
 import { getErrorMessage } from '@/types/api-error';
 import { User, Role } from '@/types/user';
 
@@ -45,7 +45,7 @@ export default function UsersClient() {
     queryFn: getTenants,
   });
 
-  const form = useForm<UserFormData>({
+  const form = useForm({
     resolver: zodResolver(userSchema),
     defaultValues: { email: '', password: '', tenantId: '', role: 'USER', active: false },
   });
