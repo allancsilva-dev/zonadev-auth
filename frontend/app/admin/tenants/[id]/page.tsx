@@ -47,7 +47,7 @@ async function TenantUsers({ tenantId }: { tenantId: string }) {
             </Link>
             <p className="text-xs text-slate-500 mt-0.5">{user.role}</p>
           </div>
-          <StatusBadge status={user.active ? 'ACTIVE' : 'INACTIVE'} />
+          <StatusBadge status={user.active} />
         </div>
       ))}
       {result.total > result.data.length && (
@@ -117,7 +117,7 @@ export default async function TenantDetailPage({ params }: Props) {
             </div>
             <div className="flex justify-between items-center">
               <dt className="text-sm text-slate-500">Estado</dt>
-              <dd><StatusBadge status={tenant.active ? 'ACTIVE' : 'INACTIVE'} /></dd>
+              <dd><StatusBadge status={tenant.active} /></dd>
             </div>
           </dl>
         </div>

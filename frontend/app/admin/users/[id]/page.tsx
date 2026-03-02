@@ -70,7 +70,7 @@ export default async function UserDetailPage({ params }: Props) {
             </div>
             <div className="flex justify-between items-center">
               <dt className="text-sm text-slate-500">Estado</dt>
-              <dd><StatusBadge status={user.active ? 'ACTIVE' : 'INACTIVE'} /></dd>
+              <dd><StatusBadge status={user.active} /></dd>
             </div>
             <div className="flex justify-between items-center">
               <dt className="text-sm text-slate-500">Email verificado</dt>
