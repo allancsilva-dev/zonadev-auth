@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 function getQueryParam(key: string): string {
   if (typeof window === 'undefined') return '';
