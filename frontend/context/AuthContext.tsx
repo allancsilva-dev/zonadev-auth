@@ -6,7 +6,7 @@ interface AuthUser {
   sub: string;
   role: string;
   tenantId: string | null;
-  plan: string;
+  plan: string | null;
 }
 
 interface AuthContextValue {
