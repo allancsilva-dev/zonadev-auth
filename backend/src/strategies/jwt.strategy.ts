@@ -5,6 +5,7 @@ import { Request } from 'express';
 
 export interface JwtPayload {
   sub: string;
+  email: string;
   jti: string;
   tokenVersion: number;
   tenantId: string | null;

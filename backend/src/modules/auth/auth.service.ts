@@ -65,6 +65,7 @@ export class AuthService {
   getMe(user: import('../../strategies/jwt.strategy').JwtPayload) {
     return {
       sub: user.sub,
+      email: user.email,
       role: user.role,
       tenantId: user.tenantId,
       tenantSubdomain: user.tenantSubdomain,
@@ -208,6 +209,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(
       {
         sub: user.id,
+        email: user.email,
         jti,
         tokenVersion: user.tokenVersion,
         tenantId: user.tenantId,
@@ -332,6 +334,7 @@ export class AuthService {
     const newAccessToken = this.jwtService.sign(
       {
         sub: freshUser.id,
+        email: freshUser.email,
         jti,
         tokenVersion: freshUser.tokenVersion,
         tenantId: freshUser.tenantId,

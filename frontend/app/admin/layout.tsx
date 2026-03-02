@@ -27,6 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const authUser = {
     sub: user.sub,
+    email: user.email,
     role: user.role,
     tenantId: user.tenantId,
     plan: user.plan,

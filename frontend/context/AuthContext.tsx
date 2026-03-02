@@ -4,6 +4,7 @@ import { createContext, useContext, ReactNode } from 'react';
 
 interface AuthUser {
   sub: string;
+  email: string;
   role: string;
   tenantId: string | null;
   plan: string | null;

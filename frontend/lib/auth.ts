@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 
 export interface MeResponse {
   sub: string;
+  email: string;
   role: string;
   tenantId: string | null;
   tenantSubdomain: string | null;

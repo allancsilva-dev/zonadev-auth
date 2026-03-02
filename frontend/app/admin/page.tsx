@@ -34,8 +34,8 @@ async function RecentTenants() {
 }
 
 async function RecentSubscriptions() {
-  const subscriptions = await serverFetch<Subscription[]>('/subscriptions');
-  const recent = subscriptions.slice(0, 5);
+  const result = await serverFetch<{ data: Subscription[] }>('/subscriptions?limit=5');
+  const recent = result.data ?? [];
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">

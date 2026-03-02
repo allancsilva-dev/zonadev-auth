@@ -17,7 +17,7 @@ export default function Topbar() {
       <div className="flex-1" />
       <div className="flex items-center gap-3">
         <div className="text-right hidden sm:block">
-          <p className="text-sm font-medium text-slate-200 leading-tight">{user.sub}</p>
+          <p className="text-sm font-medium text-slate-200 leading-tight">{user.email}</p>
           <p className="text-xs text-slate-500">{roleLabel[user.role] ?? user.role}</p>
         </div>
         <ThemeToggle />
