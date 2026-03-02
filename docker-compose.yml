@@ -117,6 +117,7 @@ services:
     networks:
       - internal
       - public
+      - nginx-proxy
     logging:
       driver: "json-file"
       options:
@@ -155,6 +156,7 @@ services:
     networks:
       - internal
       - public
+      - nginx-proxy
     logging:
       driver: "json-file"
       options:
@@ -176,3 +178,5 @@ networks:
     internal: true
   public:
     driver: bridge
+  nginx-proxy:
+    external: true  # rede gerida pelo Nginx Proxy Manager — deve existir antes do up
