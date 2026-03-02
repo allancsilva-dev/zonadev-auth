@@ -130,8 +130,8 @@ services:
       context: ./frontend
       target: production
       args:
-        # NEXT_PUBLIC_* são embutidas em tempo de build
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # NEXT_PUBLIC_* são embutidas em tempo de build — /api aponta para o proxy Next.js
+        NEXT_PUBLIC_API_URL: /api
     restart: unless-stopped
     depends_on:
       backend:
