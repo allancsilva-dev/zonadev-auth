@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
+import { getRedirectByRole } from '@/lib/routeGuard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -52,13 +53,11 @@ export default function LoginPage() {
         return;
       }
 
-      const data = await res.json();
-      // Caminhos relativos (ex: /admin) são tratados localmente —
-      // o backend rejeita paths relativos em isSafeRedirect() e retorna o fallback de produção.
-      // Isso garante que em dev o usuário vá para localhost:3001/admin, não para auth.zonadev.tech.
-      const target = redirect && redirect.startsWith('/')
-        ? redirect
-        : (data.redirect ?? redirect ?? '/');
+      await res.json();
+      const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+      const me = meRes.ok ? await meRes.json() : null;
+      const role = me?.role ?? 'USER';
+      const target = redirect && redirect.startsWith('/') ? redirect : getRedirectByRole(role);
       window.location.href = target;
     } catch {
       setError('Erro de conexão. Verifique sua internet e tente novamente');
