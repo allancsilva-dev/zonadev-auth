@@ -9,7 +9,7 @@ import { Modal } from '@/components/admin/Modal';
 import { useToast } from '@/components/admin/Toast';
 import { getPlans, createPlan, updatePlan } from '@/lib/api/plans';
 import { queryKeys } from '@/lib/queryKeys';
-import { planSchema, PlanFormData } from '@/lib/validations/plan';
+import { planSchema } from '@/lib/validations/plan';
 import { getErrorMessage } from '@/types/api-error';
 import { Plan, UpdatePlanPayload } from '@/types/plan';
 
@@ -30,12 +30,12 @@ export default function PlansClient() {
     queryFn: getPlans,
   });
 
-  const createForm = useForm<PlanFormData>({
+  const createForm = useForm({
     resolver: zodResolver(planSchema),
     defaultValues: { name: '', price: 0, maxUsers: 5, features: {} },
   });
 
-  const editForm = useForm<PlanFormData>({
+  const editForm = useForm({
     resolver: zodResolver(planSchema),
   });
 
