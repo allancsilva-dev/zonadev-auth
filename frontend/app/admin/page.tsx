@@ -1,4 +1,7 @@
 // Server Component — Dashboard com Suspense granular
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { Suspense } from 'react';
 import { serverFetch } from '@/lib/api/server';
 import { SkeletonRow } from '@/components/admin/SkeletonRow';

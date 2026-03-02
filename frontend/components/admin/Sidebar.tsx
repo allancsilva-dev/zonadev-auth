@@ -120,7 +120,7 @@ export default function Sidebar() {
       {/* User + Logout */}
       <div className="px-3 py-4 border-t border-[#2a2a2a] space-y-1">
         <div className="px-3 py-2">
-          <p className="text-slate-300 text-xs font-medium truncate">{user.sub}</p>
+          <p className="text-slate-300 text-xs font-medium truncate">{user.email}</p>
           {user.plan && (
             <p className="text-slate-500 text-xs truncate">Plano: {user.plan}</p>
           )}

@@ -14,7 +14,7 @@ export async function serverFetch<T>(path: string): Promise<T> {
   const timeout = setTimeout(() => controller.abort(), 8_000);
 
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
+    const res = await fetch(`${process.env.API_URL}${path}`, {
       cache: 'no-store', // dados de admin nunca são cacheados pelo Next
       signal: controller.signal,
       headers: {

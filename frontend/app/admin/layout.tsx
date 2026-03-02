@@ -1,5 +1,6 @@
 // Server Component — força re-render a cada request (dados de sessão nunca cacheados)
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';

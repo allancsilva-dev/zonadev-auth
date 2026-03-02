@@ -7,7 +7,8 @@ export default function AdminError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  // TODO: observability v2 — Sentry.captureException(error) aqui
+  // Visível em: docker logs zonadev-auth-frontend-1
+  console.error('[AdminError]', error);
 
   return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">

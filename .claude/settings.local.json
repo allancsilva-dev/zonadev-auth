@@ -13,7 +13,8 @@
       "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -H \"Origin: http://localhost:3001\" -d '{\"\"email\"\":\"\"admin@zonadev.tech\"\",\"\"password\"\":\"\"Zeroamor982310@\"\",\"\"aud\"\":\"\"zonadev-admin\"\"}' -D -)",
       "Bash(python3 -m json.tool)",
       "Bash(npm install @tanstack/react-query react-hook-form @hookform/resolvers zod next-themes)",
-      "Bash(npm install -D @tanstack/react-query-devtools)"
+      "Bash(npm install -D @tanstack/react-query-devtools)",
+      "Bash(npm run build)"
     ]
   }
 }
