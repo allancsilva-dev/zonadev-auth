@@ -7,6 +7,7 @@ import { User } from '@/types/user';
 import { DeactivateButton } from './DeactivateButton';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 interface Props {
   params: Promise<{ id: string }>;

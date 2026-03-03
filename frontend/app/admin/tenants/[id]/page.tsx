@@ -7,6 +7,7 @@ import { Tenant } from '@/types/tenant';
 import { User } from '@/types/user';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 interface TenantUsersResponse {
   data: User[];

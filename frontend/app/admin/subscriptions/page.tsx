@@ -3,6 +3,7 @@ import { getMe } from '@/lib/auth';
 import SubscriptionsClient from './SubscriptionsClient';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export default async function SubscriptionsPage() {
   const user = await getMe();
