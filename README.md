@@ -391,3 +391,26 @@ Substituir o store padrão por Redis no `ThrottlerModule.forRoot()`.
 ---
 
 *ZonaDev Auth v1.0 — Fevereiro 2026*
+
+---
+
+## Notas de mudanças recentes — Admin `/admin/stats` (2026-03-03)
+
+Resumo das alterações e caminhos relevantes:
+
+- Fix: `totalUsers` agora filtra `active: true` — `backend/src/modules/admin/admin.service.ts`
+- Query agregada de `subscription` usando `FILTER` (reduz de 2 scans para 1) — `backend/src/modules/admin/admin.service.ts`
+- `AdminStatsDto` com tipagem explícita — `backend/src/modules/admin/dto/admin-stats.dto.ts`
+- Cache Redis (Keyv + KeyvRedis) com TTL 60s (ms) — `backend/src/modules/admin/admin.module.ts`
+- Degradação graciosa: todas as operações Redis envoltas em `try/catch` — `backend/src/modules/admin/admin.service.ts`
+- `isValidCache()` valida payload cacheado antes de retornar — `backend/src/modules/admin/admin.service.ts`
+- Stampede protection: `SET NX` com UUID + Lua compare-and-delete — `backend/src/modules/admin/admin.service.ts` e `backend/src/modules/redis/redis.module.ts`
+- Cache key namespaced/versioned: `zonadev:admin:stats:v1`
+- Logger: cache hit/miss + slow query (>500ms) — `backend/src/modules/admin/admin.service.ts`
+- Route throttling atualizado para Throttler v3+ — `backend/src/modules/admin/admin.controller.ts`
+- `AdminService` exportado no `AdminModule` — `backend/src/modules/admin/admin.module.ts`
+- Migration de índices adicionada — `backend/src/database/migrations/20260303_create_indexes_admin_stats.ts`
+- TODO de cache invalidation documentado no service para futuras invalidações
+
+Checklist: todos os itens acima foram implementados e o backend foi buildado com sucesso (`pnpm --filter ./backend run build`).
+

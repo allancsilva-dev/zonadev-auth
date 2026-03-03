@@ -49,6 +49,13 @@ export class User {
   @Column({ name: 'password_reset_expires', type: 'timestamptz', nullable: true })
   passwordResetExpires: Date | null;
 
+  @Index('idx_users_email_verification_token')
+  @Column({ name: 'email_verification_token', type: 'varchar', nullable: true })
+  emailVerificationToken: string | null;
+
+  @Column({ name: 'email_verification_expires', type: 'timestamptz', nullable: true })
+  emailVerificationExpires: Date | null;
+
   @Column({ name: 'email_verified_at', type: 'timestamptz', nullable: true })
   emailVerifiedAt: Date | null;
 

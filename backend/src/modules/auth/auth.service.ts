@@ -25,9 +25,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from '../mail/mail.service';
 
-// Hash dummy válido de 60 chars para bcrypt.compare — evita timing attack
-// quando o usuário não existe (comparação leva o mesmo tempo que senha inválida)
-const DUMMY_HASH = '$2b$12$KIXBp/T4nak.HFizvz1H3OOiOSBjVHS9WZb6I5i1G5dSo7i6j5p2';
+// NOTE: DUMMY_HASH moved into class to avoid global hardcoded value
 
 // Limite de sessões simultâneas por usuário (LRU)
 const MAX_SESSIONS = 10;
@@ -37,6 +35,12 @@ const BCRYPT_ROUNDS = 12;
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
+  // DUMMY_HASH gerado dinamicamente para evitar dependência de hash hardcoded
+  private static readonly DUMMY_HASH: string = bcryptjs.hashSync(
+    'dummy-placeholder-zonadev',
+    12,
+  );
 
   private readonly accessExpires: number;
   private readonly refreshExpires: number;
@@ -132,7 +136,7 @@ export class AuthService {
     // Se usuário não existe, gasta o tempo do bcrypt mesmo assim.
     // Resposta idêntica para "usuário não encontrado" e "senha errada".
     if (!user) {
-      await bcryptjs.compare(dto.password, DUMMY_HASH);
+      await bcryptjs.compare(dto.password, AuthService.DUMMY_HASH);
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent);
       throw new UnauthorizedException('Credenciais inválidas');
     }
@@ -183,26 +187,21 @@ export class AuthService {
     }
 
     // 8. Verifica sessões ativas — se ≥ MAX_SESSIONS, remove a mais antiga (LRU)
-    const activeSessions = await this.refreshTokenRepo.count({
-      where: {
-        userId: user.id,
-        revokedAt: IsNull(),
-        expiresAt: Not(LessThan(new Date())),
-      },
-    });
+    await this.refreshTokenRepo.manager.transaction(async (em) => {
+      const activeSessions = await em
+        .createQueryBuilder(RefreshToken, 'rt')
+        .where('rt.user_id = :userId', { userId: user.id })
+        .andWhere('rt.revoked_at IS NULL')
+        .andWhere('rt.expires_at > NOW()')
+        .orderBy('rt.created_at', 'ASC')
+        .setLock('pessimistic_write')
+        .getMany();
 
-    if (activeSessions >= MAX_SESSIONS) {
-      const oldest = await this.refreshTokenRepo.findOne({
-        where: {
-          userId: user.id,
-          revokedAt: IsNull(),
-        },
-        order: { createdAt: 'ASC' },
-      });
-      if (oldest) {
-        await this.refreshTokenRepo.update(oldest.id, { revokedAt: new Date() });
+      if (activeSessions.length >= MAX_SESSIONS) {
+        const oldest = activeSessions[0];
+        await em.update(RefreshToken, oldest.id, { revokedAt: new Date() });
       }
-    }
+    });
 
     // 9. Gera access token RS256
     const jti = uuidv4();
@@ -234,6 +233,7 @@ export class AuthService {
       userId: user.id,
       tokenHash,
       expiresAt,
+      aud: dto.aud,
     });
 
     // 11. Registra audit
@@ -284,15 +284,19 @@ export class AuthService {
       throw new UnauthorizedException('Token inválido');
     }
 
-    // 3. Verifica expiração
-    if (tokenRecord.expiresAt < new Date()) {
-      throw new UnauthorizedException('Token expirado');
-    }
-
     const user = tokenRecord.user;
 
-    // 4. Revoga token atual (rotation obrigatória)
-    await this.refreshTokenRepo.update(tokenRecord.id, { revokedAt: new Date() });
+    // 4. Revoga token atual (rotation obrigatória) — operação atômica
+    const result = await this.refreshTokenRepo
+      .createQueryBuilder()
+      .update(RefreshToken)
+      .set({ revokedAt: new Date() })
+      .where('id = :id AND revoked_at IS NULL AND expires_at > NOW()', { id: tokenRecord.id })
+      .execute();
+
+    if (result.affected === 0) {
+      throw new UnauthorizedException('Token inválido');
+    }
 
     // 5. Valida tokenVersion — se senha foi alterada, rejeitar
     const freshUser = await this.userRepo.findOne({
@@ -329,7 +333,7 @@ export class AuthService {
     // Precisamos saber o aud original — lemos do token expirado de forma confiável
     // (o refresh não passa pelo JWT guard, precisamos ler o aud do cookie anterior)
     // Como o access token pode ter expirado, usamos o aud do env como fallback seguro
-    const aud = this.allowedAudiences[0] ?? 'auth.zonadev.tech';
+    const aud = tokenRecord.aud ?? this.allowedAudiences[0] ?? 'auth.zonadev.tech';
 
     const newAccessToken = this.jwtService.sign(
       {
@@ -358,6 +362,7 @@ export class AuthService {
       userId: freshUser.id,
       tokenHash: newTokenHash,
       expiresAt,
+      aud: tokenRecord.aud ?? null,
     });
 
     await this.audit(AuditAction.TOKEN_REFRESHED, ip, userAgent, freshUser.id, freshUser.tenantId ?? undefined);
@@ -459,24 +464,23 @@ export class AuthService {
   // ─── Verify Email ──────────────────────────────────────────────────────────
 
   async verifyEmail(rawToken: string, res: Response): Promise<void> {
-    // O token de verificação de e-mail usa o mesmo padrão:
-    // rawToken enviado por e-mail, SHA-256 armazenado como passwordResetToken
-    // com campo especial para verificação de e-mail
+    // rawToken enviado por e-mail, SHA-256 armazenado em emailVerificationToken
+    // Campo dedicado — separado de passwordResetToken (fluxos distintos)
     const tokenHash = sha256(rawToken);
 
     const user = await this.userRepo.findOne({
-      where: { passwordResetToken: tokenHash },
+      where: { emailVerificationToken: tokenHash },
     });
 
-    if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+    if (!user || !user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
       throw new BadRequestException('Link de verificação inválido ou expirado');
     }
 
     await this.userRepo.update(user.id, {
       emailVerifiedAt: new Date(),
       active: true,
-      passwordResetToken: null,
-      passwordResetExpires: null,
+      emailVerificationToken: null,
+      emailVerificationExpires: null,
     });
 
     res.json({ success: true, message: 'E-mail verificado com sucesso' });
