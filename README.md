@@ -63,7 +63,7 @@ zonadev-auth/
 │   │   ├── jobs/               ← Cleanup diário de refresh_tokens
 │   │   ├── common/             ← Decorators, filters, utils, enums
 │   │   └── database/
-│   │       ├── migrations/     ← 6 migrations com índices otimizados
+│   │       ├── migrations/     ← 9 migrations com índices otimizados
 │   │       └── seeds/          ← SUPERADMIN + tenant ZonaDev
 │   ├── .env.example
 │   ├── package.json
@@ -226,29 +226,29 @@ no futuro, adicionar `NEXT_PUBLIC_` e aceitar que irão para o bundle.
 
 ---
 
-## Auth Configuration (Backend)
+## Configuração de Autenticação (Backend)
 
-This section documents the specific authentication-related environment variables and runtime settings used by the ZonaDev Auth service.
+Esta secção documenta as variáveis de ambiente relacionadas com autenticação e as definições de runtime do serviço ZonaDev Auth.
 
-| Variable | Description | Example / Default |
+| Variável | Descrição | Exemplo / Padrão |
 |---|---|---|
-| `JWT_PRIVATE_KEY_PATH` | Path to RSA private key used to sign access tokens (RS256) | `./keys/private.pem` |
-| `JWT_PUBLIC_KEY_PATH` | Path to RSA public key used to expose JWKS | `./keys/public.pem` |
-| `JWT_KID` | Key ID used in JWT header and JWKS | `zonadev-2026-01` |
-| `JWT_ISSUER` | Issuer claim (`iss`) present in tokens | `auth.zonadev.tech` |
-| `JWT_ACCESS_EXPIRES` | Access token expiry in seconds | `900` (15m) |
-| `JWT_REFRESH_EXPIRES` | Refresh token expiry in seconds | `604800` (7d) |
-| `ALLOWED_AUDIENCES` | Comma-separated list of allowed `aud` values for clients | `renowa.zonadev.tech,zonadev-admin` |
-| `MAX_SESSIONS` | Max concurrent sessions per user (LRU eviction) | `10` |
-| `BCRYPT_ROUNDS` | Cost factor for bcrypt (password hashing) | `12` |
-| `DOMAIN` | Base domain used for cookie domain and safe redirects | `zonadev.tech` |
-| `COOKIE_SECURE_IN_PROD` | When `NODE_ENV=production`, cookies are set as `Secure` | `true` (automatic)
+| `JWT_PRIVATE_KEY_PATH` | Caminho para a chave RSA privada usada para assinar access tokens (RS256) | `./keys/private.pem` |
+| `JWT_PUBLIC_KEY_PATH` | Caminho para a chave RSA pública exposta via JWKS | `./keys/public.pem` |
+| `JWT_KID` | ID da chave usado no header do JWT e no JWKS | `zonadev-2026-01` |
+| `JWT_ISSUER` | Claim `iss` presente nos tokens | `auth.zonadev.tech` |
+| `JWT_ACCESS_EXPIRES` | Expiração do access token em segundos | `900` (15m) |
+| `JWT_REFRESH_EXPIRES` | Expiração do refresh token em segundos | `604800` (7d) |
+| `ALLOWED_AUDIENCES` | Lista separada por vírgula das audiences (`aud`) permitidas para clientes | `renowa.zonadev.tech,zonadev-admin` |
+| `MAX_SESSIONS` | Máximo de sessões concorrentes por utilizador (evicção LRU) | `10` |
+| `BCRYPT_ROUNDS` | Cost factor do bcrypt (hash de passwords) | `12` |
+| `DOMAIN` | Domínio base usado para cookie domain e redirecionamentos seguros | `zonadev.tech` |
+| `COOKIE_SECURE_IN_PROD` | Quando `NODE_ENV=production`, os cookies são marcados como `Secure` | `true` (automático) |
 
-Notes:
-- Refresh tokens are stored hashed (SHA-256) in `refresh_tokens` and support `aud` persistence so each token is tied to the client audience.
-- Refresh token rotation is enforced: on use the old token is revoked and a new one is created. Reuse detection revokes all user sessions.
-- Cookies: `access_token` and `refresh_token` are set as `HttpOnly`, `SameSite=Lax` and use domain `.zonadev.tech` in production.
-- Email verification and password reset use separate token fields on `users` to avoid token reuse across flows.
+Notas:
+- Os refresh tokens são armazenados hasheados (SHA-256) na tabela `refresh_tokens` e suportam persistência de `aud`, pelo que cada token fica ligado à audience do cliente.
+- A rotação de refresh token é obrigatória: ao usar um token, o token antigo é revogado e um novo é criado. A deteção de reutilização revoga todas as sessões do utilizador.
+- Cookies: `access_token` e `refresh_token` são definidos como `HttpOnly`, `SameSite=Lax` e usam o domínio `.zonadev.tech` em produção.
+- Verificação de e-mail e reset de password usam campos distintos na tabela `users` para evitar reutilização de tokens entre fluxos.
 
 
 ### Frontend (`frontend/.env.local` / `frontend/.env.production`)
@@ -421,6 +421,37 @@ Substituir o store padrão por Redis no `ThrottlerModule.forRoot()`.
 
 ---
 
+## Workflow de Deploy
+
+### Local (antes de cada deploy)
+```bash
+cd backend
+pnpm run migration:run  # aplica migrations pendentes na máquina local
+git add .
+git commit -m "..."
+git push origin main
+```
+
+### VPS (após git push)
+```bash
+cd /opt/zonadev-auth
+git pull origin main
+docker compose build --no-cache backend
+docker compose up -d
+docker compose run --rm migrate pnpm run migration:run
+```
+
+> ⚠️ **Atenção — migrations na VPS**
+> O container `migrate` pode reportar "No migrations are pending" mesmo quando
+> as colunas não existem no banco, se os registos já estiverem na tabela `migrations`.
+> Em caso de dúvida, verificar directamente:
+> ```bash
+> docker compose exec postgres psql -U zerodev_admin -d zonadev_db -c "\d users"
+> ```
+> Se as colunas não existirem, aplicar manualmente via SQL.
+
+---
+
 ## Notas de mudanças recentes — Admin `/admin/stats` (2026-03-03)
 
 Resumo das alterações e caminhos relevantes:
@@ -440,4 +471,55 @@ Resumo das alterações e caminhos relevantes:
 - TODO de cache invalidation documentado no service para futuras invalidações
 
 Checklist: todos os itens acima foram implementados e o backend foi buildado com sucesso (`pnpm --filter ./backend run build`).
+
+---
+
+## Notas de mudanças recentes — Auth `/auth/*` (2026-03-03)
+
+Resumo das alterações e caminhos relevantes:
+
+- Race condition no refresh eliminada: revogação atómica com `UPDATE WHERE revoked_at IS NULL AND expires_at > NOW()` — `backend/src/modules/auth/auth.service.ts`
+- Race condition no MAX_SESSIONS eliminada: transação com `SELECT ... FOR UPDATE` garante atomicidade total — `backend/src/modules/auth/auth.service.ts`
+- `aud` persistido na tabela `refresh_tokens`: token rotation mantém a audience original do cliente — `backend/src/entities/refresh-token.entity.ts`
+- `verifyEmail` usa campos dedicados `emailVerificationToken` / `emailVerificationExpires` — separados de `passwordResetToken` (fluxos distintos) — `backend/src/entities/user.entity.ts`
+- `DUMMY_HASH` movido para propriedade estática da classe (`bcryptjs.hashSync` no bootstrap) — elimina dependência de hash hardcoded — `backend/src/modules/auth/auth.service.ts`
+- Index `idx_users_email_verification_token` adicionado — `backend/src/entities/user.entity.ts`
+- Migrations adicionadas: `20260303120000_auth_fixes.ts`, `20260303130000_add_index_email_verification_token.ts`
+- Migration de índices Admin corrigida: nomes de tabelas (`subscription` → `subscriptions`, `"user"` → `users`) e timestamp da classe — `backend/src/database/migrations/20260303_create_indexes_admin_stats.ts`
+
+⚠️ Pendente: o fluxo de registo de utilizadores ainda usa `passwordResetToken` para verificação de email.
+Deve ser actualizado para usar `emailVerificationToken` / `emailVerificationExpires` antes de activar
+o registo público de utilizadores.
+
+Checklist: todos os itens acima foram implementados e o backend foi buildado com sucesso (`pnpm --filter ./backend run build`).
+---
+
+## Workflow de Deploy
+
+### Local (antes de cada deploy)
+```bash
+cd backend
+pnpm run migration:run  # aplica migrations pendentes na máquina local
+git add .
+git commit -m "..."
+git push origin main
+```
+
+### VPS (após git push)
+```bash
+cd /opt/zonadev-auth
+git pull origin main
+docker compose build --no-cache backend
+docker compose up -d
+docker compose run --rm migrate pnpm run migration:run
+```
+
+> ⚠️ **Atenção — migrations na VPS**
+> O container `migrate` pode reportar "No migrations are pending" mesmo quando
+> as colunas não existem no banco, se os registos já estiverem na tabela `migrations`.
+> Em caso de dúvida, verificar directamente:
+> ```bash
+> docker compose exec postgres psql -U zerodev_admin -d zonadev_db -c "\d users"
+> ```
+> Se as colunas não existirem, aplicar manualmente via SQL.
 
