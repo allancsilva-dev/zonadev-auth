@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import type Redis from 'ioredis';
 import KeyvRedis from '@keyv/redis';
+import Keyv from 'keyv';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
@@ -22,10 +23,14 @@ import { AdminService } from './admin.service';
         const auth = password ? `:${password}@` : '';
         const redisUrl = `redis://${auth}${host}:${port}`;
 
-        // Prefer stores array for cache-manager v6+; fallbacks handled by types if necessary
         return {
-          stores: [new KeyvRedis(redisUrl)],
-          ttl: 60,
+          stores: [
+            new Keyv({
+              store: new KeyvRedis(redisUrl),
+              namespace: 'cache',
+              ttl: 60000, // ms
+            }),
+          ],
         } as any;
       },
     }),

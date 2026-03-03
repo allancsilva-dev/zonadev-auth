@@ -118,14 +118,6 @@ export class AdminService {
     // Try writing to cache (best-effort)
     try {
       await this.cache.set(CACHE_KEY, result, CACHE_TTL_SECONDS);
-      // Temporary debug logs to verify cache store behavior
-      this.logger.log('[AdminStats] cache.set called — checking store');
-      try {
-        const check = await this.cache.get(CACHE_KEY) as unknown;
-        this.logger.log(`[AdminStats] cache.get after set: ${JSON.stringify(check)}`);
-      } catch (err: any) {
-        this.logger.warn('[AdminStats] cache.get after set failed', err?.message);
-      }
     } catch (err: any) {
       this.logger.warn('[AdminStats] Failed to write cache', err?.message);
     }
