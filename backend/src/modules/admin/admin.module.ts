@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import type Redis from 'ioredis';
+import KeyvRedis from '@keyv/redis';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
@@ -14,12 +15,16 @@ import { AdminService } from './admin.service';
     TypeOrmModule.forFeature([Tenant, User, Subscription]),
     CacheModule.registerAsync({
       isGlobal: false,
-      useFactory: async () => {
-        const { redisStore } = await import('cache-manager-ioredis-yet');
+      useFactory: () => {
+        const host = process.env.REDIS_HOST ?? 'redis';
+        const port = process.env.REDIS_PORT ?? '6379';
+        const password = process.env.REDIS_PASSWORD;
+        const auth = password ? `:${password}@` : '';
+        const redisUrl = `redis://${auth}${host}:${port}`;
+
+        // Prefer stores array for cache-manager v6+; fallbacks handled by types if necessary
         return {
-          store: redisStore,
-          host: process.env.REDIS_HOST ?? 'redis',
-          port: parseInt(process.env.REDIS_PORT ?? '6379'),
+          stores: [new KeyvRedis(redisUrl)],
           ttl: 60,
         } as any;
       },
