@@ -224,6 +224,33 @@ no futuro, adicionar `NEXT_PUBLIC_` e aceitar que irão para o bundle.
 | `MAIL_FROM` | Remetente padrão | `ZonaDev Auth <noreply@zonadev.tech>` |
 | `SEED_ADMIN_PASSWORD` | Senha do SUPERADMIN criado no seed | — |
 
+---
+
+## Auth Configuration (Backend)
+
+This section documents the specific authentication-related environment variables and runtime settings used by the ZonaDev Auth service.
+
+| Variable | Description | Example / Default |
+|---|---|---|
+| `JWT_PRIVATE_KEY_PATH` | Path to RSA private key used to sign access tokens (RS256) | `./keys/private.pem` |
+| `JWT_PUBLIC_KEY_PATH` | Path to RSA public key used to expose JWKS | `./keys/public.pem` |
+| `JWT_KID` | Key ID used in JWT header and JWKS | `zonadev-2026-01` |
+| `JWT_ISSUER` | Issuer claim (`iss`) present in tokens | `auth.zonadev.tech` |
+| `JWT_ACCESS_EXPIRES` | Access token expiry in seconds | `900` (15m) |
+| `JWT_REFRESH_EXPIRES` | Refresh token expiry in seconds | `604800` (7d) |
+| `ALLOWED_AUDIENCES` | Comma-separated list of allowed `aud` values for clients | `renowa.zonadev.tech,zonadev-admin` |
+| `MAX_SESSIONS` | Max concurrent sessions per user (LRU eviction) | `10` |
+| `BCRYPT_ROUNDS` | Cost factor for bcrypt (password hashing) | `12` |
+| `DOMAIN` | Base domain used for cookie domain and safe redirects | `zonadev.tech` |
+| `COOKIE_SECURE_IN_PROD` | When `NODE_ENV=production`, cookies are set as `Secure` | `true` (automatic)
+
+Notes:
+- Refresh tokens are stored hashed (SHA-256) in `refresh_tokens` and support `aud` persistence so each token is tied to the client audience.
+- Refresh token rotation is enforced: on use the old token is revoked and a new one is created. Reuse detection revokes all user sessions.
+- Cookies: `access_token` and `refresh_token` are set as `HttpOnly`, `SameSite=Lax` and use domain `.zonadev.tech` in production.
+- Email verification and password reset use separate token fields on `users` to avoid token reuse across flows.
+
+
 ### Frontend (`frontend/.env.local` / `frontend/.env.production`)
 
 | Variável | Prefixo | Descrição | Dev | Prod |

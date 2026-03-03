@@ -1,16 +1,18 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class createIndexesAdminStats20260303 implements MigrationInterface {
+export class createIndexesAdminStats1740960000000 implements MigrationInterface {
+  name = 'createIndexesAdminStats1740960000000';
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_subscription_status
-        ON subscription(status);
+        ON subscriptions(status);
 
       CREATE INDEX IF NOT EXISTS idx_subscription_status_expires
-        ON subscription(status, expires_at);
+        ON subscriptions(status, expires_at);
 
       CREATE INDEX IF NOT EXISTS idx_user_active
-        ON "user"(active);
+        ON users(active);
     `);
   }
 
