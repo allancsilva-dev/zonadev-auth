@@ -51,7 +51,7 @@ export class AdminService {
   async getStats(): Promise<AdminStatsDto> {
     const start = Date.now();
     const CACHE_KEY = 'zonadev:admin:stats:v1';
-    const CACHE_TTL_SECONDS = 60;
+    const CACHE_TTL_MS = 60_000; // 60 seconds in milliseconds
 
     // TODO: Cache Invalidation
     // TTL of 60s is a mitigation but not sufficient long-term for critical data.
@@ -117,7 +117,7 @@ export class AdminService {
 
     // Try writing to cache (best-effort)
     try {
-      await this.cache.set(CACHE_KEY, result, CACHE_TTL_SECONDS);
+      await this.cache.set(CACHE_KEY, result, CACHE_TTL_MS);
     } catch (err: any) {
       this.logger.warn('[AdminStats] Failed to write cache', err?.message);
     }
