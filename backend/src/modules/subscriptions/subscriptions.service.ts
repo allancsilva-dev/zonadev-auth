@@ -75,9 +75,9 @@ export class SubscriptionsService {
   async getActive(tenantId: string): Promise<Subscription | null> {
     return this.subscriptionRepo
       .createQueryBuilder('s')
-      .where('s.tenant_id = :tenantId', { tenantId })
+      .where('s.tenantId = :tenantId', { tenantId })
       .andWhere('s.status = :status', { status: SubscriptionStatus.ACTIVE })
-      .andWhere('s.expires_at > now()')
+      .andWhere('s.expiresAt > NOW()')
       .getOne();
   }
 
@@ -86,34 +86,41 @@ export class SubscriptionsService {
     planId: string;
     expiresAt: Date;
   }): Promise<Subscription> {
-    // Verifica se já existe subscription ACTIVE para este tenant
-    const existing = await this.getActive(dto.tenantId);
-    if (existing) {
-      throw new ConflictException('Tenant já possui uma subscription ativa');
+    try {
+      return await this.subscriptionRepo.save(
+        this.subscriptionRepo.create({
+          tenantId: dto.tenantId,
+          planId: dto.planId,
+          status: SubscriptionStatus.ACTIVE,
+          startedAt: new Date(),
+          expiresAt: dto.expiresAt,
+        }),
+      );
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException('Tenant já possui uma subscription ativa');
+      }
+      throw err;
     }
-
-    return this.subscriptionRepo.save(
-      this.subscriptionRepo.create({
-        tenantId: dto.tenantId,
-        planId: dto.planId,
-        status: SubscriptionStatus.ACTIVE,
-        startedAt: new Date(),
-        expiresAt: dto.expiresAt,
-      }),
-    );
   }
 
   async cancel(id: string): Promise<Subscription> {
     const sub = await this.subscriptionRepo.findOne({ where: { id } });
     if (!sub) throw new NotFoundException('Subscription não encontrada');
-    await this.subscriptionRepo.update(id, { status: SubscriptionStatus.CANCELLED });
-    return this.subscriptionRepo.findOne({ where: { id } }) as Promise<Subscription>;
+    if (sub.status === SubscriptionStatus.CANCELLED) {
+      throw new ConflictException('Subscription já está cancelada');
+    }
+    sub.status = SubscriptionStatus.CANCELLED;
+    return this.subscriptionRepo.save(sub);
   }
 
   async suspend(id: string): Promise<Subscription> {
     const sub = await this.subscriptionRepo.findOne({ where: { id } });
     if (!sub) throw new NotFoundException('Subscription não encontrada');
-    await this.subscriptionRepo.update(id, { status: SubscriptionStatus.SUSPENDED });
-    return this.subscriptionRepo.findOne({ where: { id } }) as Promise<Subscription>;
+    if (sub.status !== SubscriptionStatus.ACTIVE) {
+      throw new ConflictException('Apenas subscriptions ACTIVE podem ser suspensas');
+    }
+    sub.status = SubscriptionStatus.SUSPENDED;
+    return this.subscriptionRepo.save(sub);
   }
 }
