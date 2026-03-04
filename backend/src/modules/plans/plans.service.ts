@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Plan } from '../../entities/plan.entity';
+import { CreatePlanDto } from './dto/create-plan.dto';
+import { UpdatePlanDto } from './dto/update-plan.dto';
 
 @Injectable()
 export class PlansService {
@@ -9,7 +11,7 @@ export class PlansService {
     @InjectRepository(Plan) private readonly planRepo: Repository<Plan>,
   ) {}
 
-  findAll() { return this.planRepo.find(); }
+  findAll() { return this.planRepo.find({ order: { name: 'ASC' } }); }
 
   async findOne(id: string): Promise<Plan> {
     const plan = await this.planRepo.findOne({ where: { id } });
@@ -17,11 +19,11 @@ export class PlansService {
     return plan;
   }
 
-  create(dto: Partial<Plan>) { return this.planRepo.save(this.planRepo.create(dto)); }
+  create(dto: CreatePlanDto) { return this.planRepo.save(this.planRepo.create(dto)); }
 
-  async update(id: string, dto: Partial<Plan>): Promise<Plan> {
-    await this.findOne(id);
-    await this.planRepo.update(id, dto);
-    return this.findOne(id);
+  async update(id: string, dto: UpdatePlanDto): Promise<Plan> {
+    const plan = await this.planRepo.preload({ id, ...dto });
+    if (!plan) throw new NotFoundException('Plano não encontrado');
+    return this.planRepo.save(plan);
   }
 }

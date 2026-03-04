@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { PlansService } from './plans.service';
-import { Plan } from '../../entities/plan.entity';
+import { CreatePlanDto } from './dto/create-plan.dto';
+import { UpdatePlanDto } from './dto/update-plan.dto';
 import { JwtAuthGuard } from '../../guards/jwt.guard';
 import { RolesGuard } from '../../guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -16,12 +17,12 @@ export class PlansController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN)
-  create(@Body() dto: Partial<Plan>) { return this.plansService.create(dto); }
+  create(@Body() dto: CreatePlanDto) { return this.plansService.create(dto); }
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN)
-  update(@Param('id') id: string, @Body() dto: Partial<Plan>) {
+  update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdatePlanDto) {
     return this.plansService.update(id, dto);
   }
 }
