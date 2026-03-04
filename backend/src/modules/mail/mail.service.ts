@@ -22,7 +22,10 @@ export class MailService {
         },
       });
     } catch (err) {
-      this.logger.error(`Falha ao enviar e-mail de reset para ${email}: ${err}`);
+      this.logger.error(
+        `Falha ao enviar e-mail de reset para ${email}`,
+        err instanceof Error ? err.stack : String(err),
+      );
       // Não relançar — não revelar falha de entrega ao cliente
     }
   }
@@ -41,7 +44,10 @@ export class MailService {
         },
       });
     } catch (err) {
-      this.logger.error(`Falha ao enviar e-mail de verificação para ${email}: ${err}`);
+      this.logger.error(
+        `Falha ao enviar e-mail de verificação para ${email}`,
+        err instanceof Error ? err.stack : String(err),
+      );
     }
   }
 }
