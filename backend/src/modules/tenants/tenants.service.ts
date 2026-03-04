@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
+import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Injectable()
 export class TenantsService {
@@ -58,19 +59,34 @@ export class TenantsService {
   }
 
   async create(dto: CreateTenantDto): Promise<Tenant> {
-    const existing = await this.findBySubdomain(dto.subdomain);
-    if (existing) throw new ConflictException('Subdomínio já está em uso');
-    return this.tenantRepo.save(this.tenantRepo.create(dto));
+    try {
+      return await this.tenantRepo.save(this.tenantRepo.create(dto));
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException('Dados duplicados — verifique os campos únicos');
+      }
+      throw err;
+    }
   }
 
-  async update(id: string, dto: Partial<CreateTenantDto>): Promise<Tenant> {
-    await this.findOne(id);
-    await this.tenantRepo.update(id, dto);
-    return this.findOne(id);
+  async update(id: string, dto: UpdateTenantDto): Promise<Tenant> {
+    const tenant = await this.tenantRepo.preload({ id, ...dto });
+    if (!tenant) throw new NotFoundException('Tenant não encontrado');
+    try {
+      return await this.tenantRepo.save(tenant);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException('Subdomínio já está em uso');
+      }
+      throw err;
+    }
   }
 
   async remove(id: string): Promise<void> {
-    await this.findOne(id);
-    await this.tenantRepo.delete(id);
+    const tenant = await this.findOne(id);
+    if (!tenant.active) {
+      throw new ConflictException('Tenant já está inactivo');
+    }
+    await this.tenantRepo.update(id, { active: false });
   }
 }

@@ -8,7 +8,10 @@ export class CreateTenantDto {
 
   @IsNotEmpty()
   @IsString()
-  @Matches(/^[a-z0-9-]+$/, { message: 'Subdomínio deve conter apenas letras minúsculas, números e hífens' })
+  @Matches(/^(?!-)[a-z0-9-]{3,30}(?<!-)$/, {
+    message:
+      'Subdomínio deve ter 3-30 caracteres, apenas letras minúsculas, números e hífens, sem começar ou terminar com hífen',
+  })
   subdomain: string;
 
   @IsOptional()
