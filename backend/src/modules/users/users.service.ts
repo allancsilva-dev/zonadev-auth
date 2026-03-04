@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,6 +11,7 @@ import * as bcryptjs from 'bcryptjs';
 import { User } from '../../entities/user.entity';
 import { Role } from '../../common/enums/role.enum';
 import { CreateUserDto } from './dto/create-user.dto';
+import type { JwtPayload } from '../../strategies/jwt.strategy';
 
 const BCRYPT_ROUNDS = 12;
 const ALLOWED_SORT_FIELDS = ['createdAt', 'email', 'role'] as const;
@@ -84,9 +86,14 @@ export class UsersService {
     };
   }
 
-  async findOne(id: string): Promise<User> {
+  async findOne(id: string, currentUser?: JwtPayload): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id }, relations: ['tenant'] });
     if (!user) throw new NotFoundException('Usuário não encontrado');
+
+    if (currentUser?.role === Role.ADMIN && user.tenantId !== currentUser.tenantId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
     return user;
   }
 
@@ -101,14 +108,27 @@ export class UsersService {
     return this.userRepo.findOne({ where: { passwordResetToken: tokenHash } });
   }
 
-  async create(dto: CreateUserDto): Promise<Omit<User, 'passwordHash'>> {
-    // ADMIN e USER precisam de tenantId
-    if (dto.role && dto.role !== Role.SUPERADMIN && !dto.tenantId) {
-      throw new BadRequestException('tenantId obrigatório para ADMIN e USER');
+  async create(
+    dto: CreateUserDto,
+    creatorRole: Role,
+    creatorTenantId: string | null,
+  ): Promise<Omit<User, 'passwordHash'>> {
+    const finalRole = dto.role ?? Role.USER;
+
+    // ADMIN sempre usa o próprio tenantId — nunca confia no body
+    if (creatorRole === Role.ADMIN) {
+      dto.tenantId = creatorTenantId ?? undefined;
     }
 
-    const existing = await this.findByEmail(dto.email);
-    if (existing) throw new ConflictException('E-mail já cadastrado');
+    // ADMIN não pode criar SUPERADMIN
+    if (creatorRole === Role.ADMIN && finalRole === Role.SUPERADMIN) {
+      throw new BadRequestException('ADMIN não pode criar utilizadores SUPERADMIN');
+    }
+
+    // Non-SUPERADMIN sem tenantId é inválido
+    if (finalRole !== Role.SUPERADMIN && !dto.tenantId) {
+      throw new BadRequestException('tenantId obrigatório para ADMIN e USER');
+    }
 
     const passwordHash = await bcryptjs.hash(dto.password, BCRYPT_ROUNDS);
 
@@ -116,22 +136,44 @@ export class UsersService {
       email: dto.email.toLowerCase().trim(),
       passwordHash,
       tenantId: dto.tenantId ?? null,
-      role: dto.role ?? Role.USER,
+      role: finalRole,
       active: dto.active ?? false, // inicia inativo — verificação de e-mail
       tokenVersion: 1,
     });
 
-    const saved = await this.userRepo.save(user);
-    const { passwordHash: _, ...result } = saved;
-    return result as any;
+    try {
+      const saved = await this.userRepo.save(user);
+      const { passwordHash: _, ...result } = saved;
+      return result as Omit<User, 'passwordHash'>;
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException('E-mail já cadastrado');
+      }
+      throw err;
+    }
   }
 
-  async update(id: string, data: Partial<User>): Promise<void> {
-    await this.userRepo.update(id, data);
+  async update(
+    id: string,
+    data: Partial<Pick<User,
+      | 'active'
+      | 'emailVerifiedAt'
+      | 'tokenVersion'
+      | 'passwordHash'
+      | 'passwordResetToken'
+      | 'passwordResetExpires'
+      | 'emailVerificationToken'
+      | 'emailVerificationExpires'
+    >>,
+  ): Promise<void> {
+    await this.userRepo.update(id, data as any);
   }
 
-  async deactivate(id: string): Promise<void> {
-    await this.findOne(id);
+  async deactivate(id: string, currentUser?: JwtPayload): Promise<void> {
+    const user = await this.findOne(id, currentUser);
+    if (!user.active) {
+      throw new ConflictException('Utilizador já está inactivo');
+    }
     await this.userRepo.update(id, { active: false });
   }
 }

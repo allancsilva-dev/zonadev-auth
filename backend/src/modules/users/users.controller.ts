@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, ParseUUIDPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -8,6 +8,7 @@ import { RolesGuard } from '../../guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { JwtPayload } from '../../strategies/jwt.strategy';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,15 +24,15 @@ export class UsersController {
     @Query('role') role?: string,
     @Query('active') active?: string,
     @Query('sort') sort?: string,
-    @CurrentUser() user?: any,
+    @CurrentUser() user?: JwtPayload,
   ) {
     // ADMIN: tenantId sempre do JWT — imune a horizontal privilege escalation
-    const effectiveTenantId = user?.role === Role.ADMIN ? user.tenantId : undefined;
+    const effectiveTenantId = user?.role === Role.ADMIN ? (user.tenantId ?? undefined) : undefined;
     return this.usersService.findAll(effectiveTenantId, {
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
+      page: Number(page) > 0 ? Number(page) : undefined,
+      limit: Number(limit) > 0 ? Number(limit) : undefined,
       search,
-      role: role as Role,
+      role: Object.values(Role).includes(role as Role) ? (role as Role) : undefined,
       active: active === 'true' ? true : active === 'false' ? false : undefined,
       sort,
     });
@@ -39,19 +40,22 @@ export class UsersController {
 
   @Get(':id')
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  findOne(@Param('id') id: string) { return this.usersService.findOne(id); }
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) { return this.usersService.findOne(id, user); }
 
   @Post()
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  create(@Body() dto: CreateUserDto) { return this.usersService.create(dto); }
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: JwtPayload) { return this.usersService.create(dto, user.role, user.tenantId ?? null); }
 
   // Soft delete via PATCH — nunca hard delete em IdP
   @Patch(':id/deactivate')
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  deactivatePatch(@Param('id') id: string) { return this.usersService.deactivate(id); }
+  deactivatePatch(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: JwtPayload) { return this.usersService.deactivate(id, user); }
 
   // Mantido para compatibilidade com código existente — delega para deactivate
   @Delete(':id')
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  deactivate(@Param('id') id: string) { return this.usersService.deactivate(id); }
+  deactivate(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: JwtPayload) { return this.usersService.deactivate(id, user); }
 }

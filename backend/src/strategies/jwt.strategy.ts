@@ -1,6 +1,7 @@
 import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ExtractJwt, Strategy, StrategyOptionsWithoutRequest } from 'passport-jwt';
 import { Request } from 'express';
 
 export interface JwtPayload {
@@ -11,7 +12,7 @@ export interface JwtPayload {
   tenantId: string | null;
   tenantSubdomain: string | null;
   plan: string | null;
-  role: string;
+  role: Role;
   iss: string;
   aud: string;
   iat: number;
@@ -37,13 +38,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       jsonWebTokenOptions: {
         clockTolerance: 60,
       },
-    } as any);
+    } as StrategyOptionsWithoutRequest);
   }
 
   async validate(payload: JwtPayload): Promise<JwtPayload> {
     if (!payload.sub || !payload.jti) {
       throw new UnauthorizedException('Token inválido');
     }
+
+    if (!Object.values(Role).includes(payload.role)) {
+      throw new UnauthorizedException('Token inválido');
+    }
+
     return payload;
   }
 }
