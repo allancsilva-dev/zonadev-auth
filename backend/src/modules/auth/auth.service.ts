@@ -83,7 +83,7 @@ export class AuthService {
     return {
       httpOnly: true,
       secure: this.isProduction,
-      sameSite: 'lax' as const,
+      sameSite: 'none' as const,
       domain: this.isProduction ? '.zonadev.tech' : undefined,
       maxAge: maxAgeMs,
     };
@@ -391,7 +391,7 @@ export class AuthService {
     const clearOptions = {
       httpOnly: true,
       secure: this.isProduction,
-      sameSite: 'lax' as const,
+      sameSite: 'none' as const,
       domain: this.isProduction ? '.zonadev.tech' : undefined,
     };
 
