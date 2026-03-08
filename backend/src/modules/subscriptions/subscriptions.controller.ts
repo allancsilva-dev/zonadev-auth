@@ -26,7 +26,7 @@ export class SubscriptionsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     // ADMIN: tenantId sempre do JWT — imune a horizontal privilege escalation
-    const effectiveTenantId = user?.role === Role.ADMIN ? (user.tenantId ?? undefined) : tenantId;
+    const effectiveTenantId = user?.roles?.includes(Role.ADMIN) ? (user.tenantId ?? undefined) : tenantId;
     return this.subscriptionsService.findAll({
       page: Number(page) > 0 ? Number(page) : undefined,
       limit: Number(limit) > 0 ? Number(limit) : undefined,
@@ -42,7 +42,7 @@ export class SubscriptionsController {
     @Body() dto: CreateSubscriptionDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    const effectiveTenantId = user.role === Role.ADMIN ? user.tenantId : dto.tenantId;
+    const effectiveTenantId = user.roles?.includes(Role.ADMIN) ? user.tenantId : dto.tenantId;
 
     if (!effectiveTenantId) {
       throw new BadRequestException('tenantId é obrigatório');

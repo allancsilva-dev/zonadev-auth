@@ -14,7 +14,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import type { JwtPayload } from '../../strategies/jwt.strategy';
 
 const BCRYPT_ROUNDS = 12;
-const ALLOWED_SORT_FIELDS = ['createdAt', 'email', 'role'] as const;
+const ALLOWED_SORT_FIELDS = ['createdAt', 'email'] as const;
 
 export interface UserListQuery {
   page?: number;
@@ -58,7 +58,7 @@ export class UsersService {
     }
 
     if (query?.role) {
-      qb.andWhere('u.role = :role', { role: query.role });
+      qb.andWhere(':role = ANY(u.roles)', { role: query.role });
     }
 
     if (query?.active !== undefined) {
@@ -90,7 +90,7 @@ export class UsersService {
     const user = await this.userRepo.findOne({ where: { id }, relations: ['tenant'] });
     if (!user) throw new NotFoundException('Usuário não encontrado');
 
-    if (currentUser?.role === Role.ADMIN && user.tenantId !== currentUser.tenantId) {
+    if (currentUser?.roles?.includes(Role.ADMIN) && user.tenantId !== currentUser.tenantId) {
       throw new ForbiddenException('Acesso negado');
     }
 
@@ -136,7 +136,7 @@ export class UsersService {
       email: dto.email.toLowerCase().trim(),
       passwordHash,
       tenantId: dto.tenantId ?? null,
-      role: finalRole,
+      roles: [finalRole],
       active: dto.active ?? false, // inicia inativo — verificação de e-mail
       tokenVersion: 1,
     });

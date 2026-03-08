@@ -27,7 +27,7 @@ export class UsersController {
     @CurrentUser() user?: JwtPayload,
   ) {
     // ADMIN: tenantId sempre do JWT — imune a horizontal privilege escalation
-    const effectiveTenantId = user?.role === Role.ADMIN ? (user.tenantId ?? undefined) : undefined;
+    const effectiveTenantId = user?.roles?.includes(Role.ADMIN) ? (user.tenantId ?? undefined) : undefined;
     return this.usersService.findAll(effectiveTenantId, {
       page: Number(page) > 0 ? Number(page) : undefined,
       limit: Number(limit) > 0 ? Number(limit) : undefined,
@@ -47,7 +47,7 @@ export class UsersController {
 
   @Post()
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  create(@Body() dto: CreateUserDto, @CurrentUser() user: JwtPayload) { return this.usersService.create(dto, user.role, user.tenantId ?? null); }
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: JwtPayload) { return this.usersService.create(dto, (user.roles?.[0] as Role) ?? Role.USER, user.tenantId ?? null); }
 
   // Soft delete via PATCH — nunca hard delete em IdP
   @Patch(':id/deactivate')

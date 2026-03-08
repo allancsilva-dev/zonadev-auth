@@ -109,7 +109,7 @@ async function seed() {
         email: 'admin@zonadev.tech',
         passwordHash,
         tenantId: null,       // SUPERADMIN não pertence a tenant
-        role: Role.SUPERADMIN,
+        roles: [Role.SUPERADMIN],
         active: true,
         tokenVersion: 1,
         emailVerifiedAt: new Date(), // SUPERADMIN não precisa verificar e-mail
