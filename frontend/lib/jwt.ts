@@ -4,7 +4,7 @@
 
 export interface JwtPayload {
   sub: string;
-  role: string;
+  roles: string[];
   tenantId: string | null;
   tenantSubdomain: string | null;
   plan: string;

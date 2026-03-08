@@ -4,6 +4,7 @@ export interface MeResponse {
   sub: string;
   email: string;
   role: string;
+  roles: string[];
   tenantId: string | null;
   tenantSubdomain: string | null;
   plan: string | null;
@@ -37,7 +38,12 @@ export async function getMe(): Promise<MeResponse | null> {
     });
 
     if (!res.ok) return null;
-    return res.json() as Promise<MeResponse>;
+
+    const data = await res.json() as { sub: string; email: string; roles: string[]; tenantId: string | null; tenantSubdomain: string | null; plan: string | null };
+    return {
+      ...data,
+      role: data.roles?.[0] ?? 'USER',
+    };
   } catch {
     return null;
   }
