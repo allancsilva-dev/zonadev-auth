@@ -56,7 +56,7 @@ export default function LoginPage() {
       await res.json();
       const meRes = await fetch('/api/auth/me', { credentials: 'include' });
       const me = meRes.ok ? await meRes.json() : null;
-      const role = me?.role ?? 'USER';
+      const role = me?.roles?.[0] ?? 'USER';
       const isSafeRedirect = (url: string): boolean => {
         if (url.startsWith('/')) return true;
         try {
