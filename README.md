@@ -249,7 +249,7 @@ Esta secção documenta as variáveis de ambiente relacionadas com autenticaçã
 Notas:
 - Os refresh tokens são armazenados hasheados (SHA-256) na tabela `refresh_tokens` e suportam persistência de `aud`, pelo que cada token fica ligado à audience do cliente.
 - A rotação de refresh token é obrigatória: ao usar um token, o token antigo é revogado e um novo é criado. A deteção de reutilização revoga todas as sessões do utilizador.
-- Cookies: `access_token` e `refresh_token` são definidos como `HttpOnly`, `SameSite=Lax` e usam o domínio `.zonadev.tech` em produção.
+- Cookies: `access_token` e `refresh_token` são definidos como `HttpOnly`, `SameSite=None; Secure` e usam o domínio `.zonadev.tech` em produção (necessário para SSO cross-origin).
 - Verificação de e-mail e reset de password usam campos distintos na tabela `users` para evitar reutilização de tokens entre fluxos.
 
 
@@ -419,7 +419,7 @@ Substituir o store padrão por Redis no `ThrottlerModule.forRoot()`.
 
 ---
 
-*ZonaDev Auth v1.0 — Fevereiro 2026*
+*ZonaDev Auth v1.2 — Março 2026*
 
 ---
 
@@ -601,3 +601,132 @@ docker compose run --rm migrate pnpm run migration:run
 > docker compose exec postgres psql -U zerodev_admin -d zonadev_db -c "\d users"
 > ```
 > Se as colunas não existirem, aplicar manualmente via SQL.
+
+---
+
+## Notas de mudanças recentes — SSO cross-origin + Renowa (2026-03-08)
+
+### Fix 6 — Senha com hash corrompido no banco (bash interpreta `$`)
+
+O bash interpreta `$` como variável ao usar psql inline. Ao inserir hashes bcrypt, escapar com `\$`:
+
+```bash
+# ERRADO — bash expande $2b, $12 como variáveis
+docker compose exec postgres psql -U zerodev_admin -d zonadev_db \
+  -c "UPDATE users SET password_hash = '$2b$12$...' WHERE email = '...';"
+
+# CORRETO
+docker compose exec postgres psql -U zerodev_admin -d zonadev_db \
+  -c "UPDATE users SET password_hash = '\$2b\$12\$...' WHERE email = '...';"
+```
+
+### Fix 7 — `roles[]` vs `role` mismatch (frontend/lib/auth.ts)
+
+Backend retorna `roles: string[]` mas o frontend esperava `role: string`.
+Corrigido em `frontend/lib/auth.ts`: deriva `role: data.roles?.[0] ?? 'USER'` ao retornar de `getMe()`.
+Também corrigido `frontend/lib/jwt.ts`: `JwtPayload.role: string` → `roles: string[]`.
+
+### Fix 8 — `SAFE_REDIRECT_FALLBACK` apontando para raiz
+
+Alterado de `https://auth.zonadev.tech` para `https://auth.zonadev.tech/admin`
+em `backend/src/common/utils/redirect.util.ts`.
+
+### Fix 9 — SameSite cookie para SSO cross-origin
+
+Cookies com `SameSite=Lax` não são enviados em requisições cross-origin via `fetch()`.
+Alterado para `SameSite=None` em `backend/src/modules/auth/auth.service.ts` (linhas 86 e 394).
+
+```typescript
+// Para SSO multi-tenant (ex: renowa.zonadev.tech → auth.zonadev.tech)
+sameSite: 'none' as const,  // NÃO 'lax'
+secure: true,               // obrigatório com SameSite=None
+domain: '.zonadev.tech',    // compartilha entre subdomínios
+```
+
+> `SameSite=None` só funciona com `Secure=true` — já configurado via `secure: this.isProduction`.
+
+### Fix 10 — `ALLOWED_ORIGINS` faltando Renowa
+
+Adicionado `https://renowa.zonadev.tech` no `.env`:
+
+```
+ALLOWED_ORIGINS=https://auth.zonadev.tech,https://renowa.zonadev.tech
+```
+
+---
+
+## Notas de mudanças recentes — Sistema Renowa (2026-03-08)
+
+### Fix Renowa 1 — ProtectedRoute race condition (frontend/src/App.tsx)
+
+`isAuthenticated` do Zustand não atualizava a tempo após `setUser()` no mesmo ciclo de render.
+
+```typescript
+// ERRADO — depender do store no mesmo render
+const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+if (!isAuthenticated) redirect();
+
+// CORRETO — estado local controlado pelo useEffect
+const [authState, setAuthState] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+// setAuthState('authenticated') após setUser(data) no .then()
+```
+
+### Fix Renowa 2 — Campo `nome` → `email` em AuthUser
+
+`AuthUser` foi atualizado para refletir o retorno real de `/api/auth/me` (sem `nome`, com `email`).
+Arquivos corrigidos:
+- `frontend/src/types/index.ts`
+- `frontend/src/components/layout/Header.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`
+- `frontend/src/pages/Configuracoes.tsx`
+
+### Fix Renowa 3 — Login pós-SSO usa `data.redirect` do backend
+
+`frontend/app/login/page.tsx` do ZonaDev Auth: removida a chamada redundante a `/api/auth/me` pós-login.
+O backend já retorna `{ success: true, redirect: string }` no `POST /auth/login`.
+
+```typescript
+const data = await res.json();
+const target = data.redirect && isSafeRedirect(data.redirect)
+  ? data.redirect
+  : (redirect && isSafeRedirect(redirect) ? redirect : '/admin');
+window.location.href = target;
+```
+
+---
+
+## Padrões corretos estabelecidos em Março 2026
+
+### Escape de hashes bcrypt no bash
+
+```bash
+# ERRADO
+password_hash = '$2b$12$...'
+
+# CORRETO
+password_hash = '\$2b\$12\$...'
+```
+
+### Cookies para SSO multi-tenant
+
+```typescript
+sameSite: 'none' as const,  // NÃO 'lax' — necessário para cross-origin
+secure: true,               // obrigatório com SameSite=None
+domain: '.zonadev.tech',    // compartilha entre todos os subdomínios
+```
+
+### React SPA com auth externo — evitar race condition
+
+```typescript
+// ERRADO
+const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+if (!isAuthenticated) redirect();
+
+// CORRETO
+const [authState, setAuthState] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+// Só redireciona após o useEffect resolver
+```
+
+### ALLOWED_ORIGINS deve incluir todos os clientes SSO
+
+Ao integrar uma nova aplicação cliente, adicionar seu domínio em `ALLOWED_ORIGINS` e em `ALLOWED_AUDIENCES`.
