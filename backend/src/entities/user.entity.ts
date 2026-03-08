@@ -30,8 +30,8 @@ export class User {
   @JoinColumn({ name: 'tenant_id' })
   tenant: Tenant | null;
 
-  @Column({ type: 'enum', enum: Role, default: Role.USER })
-  role: Role;
+  @Column({ type: 'text', array: true, default: '{}' })
+  roles: string[];
 
   @Column({ name: 'token_version', type: 'integer', default: 1 })
   tokenVersion: number;

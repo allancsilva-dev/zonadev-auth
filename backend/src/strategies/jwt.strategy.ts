@@ -12,7 +12,7 @@ export interface JwtPayload {
   tenantId: string | null;
   tenantSubdomain: string | null;
   plan: string | null;
-  role: Role;
+  roles: string[];
   iss: string;
   aud: string;
   iat: number;
@@ -46,7 +46,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token inválido');
     }
 
-    if (!Object.values(Role).includes(payload.role)) {
+    const validRoles = Object.values(Role) as string[];
+    if (!payload.roles.every((role) => validRoles.includes(role))) {
       throw new UnauthorizedException('Token inválido');
     }
 

@@ -223,6 +223,8 @@ no futuro, adicionar `NEXT_PUBLIC_` e aceitar que irão para o bundle.
 | `MAIL_PASS` | SMTP senha | — |
 | `MAIL_FROM` | Remetente padrão | `ZonaDev Auth <noreply@zonadev.tech>` |
 | `SEED_ADMIN_PASSWORD` | Senha do SUPERADMIN criado no seed | — |
+| `HEALTH_CACHE_TTL_MS` | Cache do endpoint /health (ms) | `5000` |
+| `HEALTH_TIMEOUT_MS` | Timeout dos checks de banco/redis (ms) | `1500` |
 
 ---
 
@@ -292,7 +294,7 @@ Notas:
   "tenantId": "tenant-uuid",
   "tenantSubdomain": "renowa",
   "plan": "PRO",
-  "role": "ADMIN",
+  "roles": ["ADMIN", "VENDEDOR"],
   "iss": "auth.zonadev.tech",
   "aud": "renowa.zonadev.tech",
   "iat": 1700000000,
@@ -448,6 +450,58 @@ docker compose run --rm migrate pnpm run migration:run
 > ```bash
 > docker compose exec postgres psql -U zerodev_admin -d zonadev_db -c "\d users"
 > ```
+>
+> Se as colunas não existirem, aplicar manualmente via SQL.
+
+---
+
+## Testes
+
+Este repositório pode incluir testes unitários e de integração. Para executar os testes locais:
+
+### Backend
+
+```bash
+cd backend
+pnpm install
+pnpm run test        # executa testes unitários, se existirem
+pnpm run test:watch  # executa testes em modo watch durante desenvolvimento
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run test
+```
+
+> Observação: se os scripts de teste não estiverem presentes, adicionar os comandos correspondentes ao `package.json` de cada pacote.
+
+---
+
+## Contribuição
+
+Contribuições são bem-vindas. Procedimento recomendado:
+
+- Abra uma issue descrevendo a alteração proposta.
+- Crie um branch com nome descritivo: `feature/descricao` ou `fix/descricao`.
+- Adicione testes para novas funcionalidades ou correções importantes.
+- Execute `pnpm --filter ./backend run build` antes de abrir o PR.
+- Garanta que migrations são adicionadas para mudanças no schema.
+
+PR checklist mínima:
+
+- Código formatado e lintado.
+- Build do backend e frontend passam sem erros.
+- Migrations e seeds atualizados quando necessário.
+
+---
+
+## Suporte / Contato
+
+Para suporte, abra uma issue no repositório ou contacte a equipa responsável pelo projeto.
+
 > Se as colunas não existirem, aplicar manualmente via SQL.
 
 ---
@@ -492,6 +546,31 @@ Deve ser actualizado para usar `emailVerificationToken` / `emailVerificationExpi
 o registo público de utilizadores.
 
 Checklist: todos os itens acima foram implementados e o backend foi buildado com sucesso (`pnpm --filter ./backend run build`).
+
+---
+
+## Notas de mudanças recentes — Health / Mail / Plans (2026-03-03)
+
+Resumo das alterações e melhorias de estabilidade:
+
+### Health (`/health`)
+- **Endpoints separados:**
+  - `GET /health`: Liveness probe (rápido, apenas verifica se o serviço está de pé).
+  - `GET /health/ready`: Readiness probe (verifica conexão com DB e Redis).
+- **Resiliência:** Checks em paralelo com `Promise.race` e timeout configurável.
+- **Cache:** Cache in-memory por instância (evita DoS no banco por health checks frequentes).
+- **Env Vars:** `HEALTH_CACHE_TTL_MS` (padrão 5000ms) e `HEALTH_TIMEOUT_MS` (padrão 1500ms).
+
+### Mail
+- **Segurança:** Logs de erro sanitizados (evita vazar stack traces ou credenciais em logs de produção).
+- **Configuração:** `MAIL_PORT` com validação numérica e detecção automática de `secure: true` para porta 465.
+
+### Plans
+- **Validação Rigorosa:** Implementados DTOs (`CreatePlanDto`, `UpdatePlanDto`) com `class-validator`.
+- **Precisão:** Preço validado para máximo de 2 casas decimais.
+- **Segurança:** `forbidNonWhitelisted: true` ativado globalmente (API rejeita campos desconhecidos no payload).
+
+Checklist: todos os itens acima foram implementados e o backend foi buildado com sucesso (`pnpm --filter ./backend run build`).
 ---
 
 ## Workflow de Deploy
@@ -522,4 +601,3 @@ docker compose run --rm migrate pnpm run migration:run
 > docker compose exec postgres psql -U zerodev_admin -d zonadev_db -c "\d users"
 > ```
 > Se as colunas não existirem, aplicar manualmente via SQL.
-

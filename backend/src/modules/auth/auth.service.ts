@@ -70,7 +70,7 @@ export class AuthService {
     return {
       sub: user.sub,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       tenantId: user.tenantId,
       tenantSubdomain: user.tenantSubdomain,
       plan: user.plan,
@@ -214,7 +214,7 @@ export class AuthService {
         tenantId: user.tenantId,
         tenantSubdomain: user.tenant?.subdomain ?? null,
         plan: user.tenant?.plan ?? null,
-        role: user.role,
+        roles: user.roles,
         aud: dto.aud,
       },
       {
@@ -344,7 +344,7 @@ export class AuthService {
         tenantId: freshUser.tenantId,
         tenantSubdomain: freshUser.tenant?.subdomain ?? null,
         plan: freshUser.tenant?.plan ?? null,
-        role: freshUser.role,
+        roles: freshUser.roles,
         aud,
       },
       {

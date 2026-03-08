@@ -57,7 +57,16 @@ export default function LoginPage() {
       const meRes = await fetch('/api/auth/me', { credentials: 'include' });
       const me = meRes.ok ? await meRes.json() : null;
       const role = me?.role ?? 'USER';
-      const target = redirect && redirect.startsWith('/') ? redirect : getRedirectByRole(role);
+      const isSafeRedirect = (url: string): boolean => {
+        if (url.startsWith('/')) return true;
+        try {
+          const { protocol, hostname } = new URL(url);
+          return protocol === 'https:' && (hostname === 'zonadev.tech' || hostname.endsWith('.zonadev.tech'));
+        } catch {
+          return false;
+        }
+      };
+      const target = redirect && isSafeRedirect(redirect) ? redirect : getRedirectByRole(role);
       window.location.href = target;
     } catch {
       setError('Erro de conexão. Verifique sua internet e tente novamente');
