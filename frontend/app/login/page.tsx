@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { getRedirectByRole } from '@/lib/routeGuard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -53,10 +52,7 @@ export default function LoginPage() {
         return;
       }
 
-      await res.json();
-      const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-      const me = meRes.ok ? await meRes.json() : null;
-      const role = me?.roles?.[0] ?? 'USER';
+      const data = await res.json();
       const isSafeRedirect = (url: string): boolean => {
         if (url.startsWith('/')) return true;
         try {
@@ -66,7 +62,9 @@ export default function LoginPage() {
           return false;
         }
       };
-      const target = redirect && isSafeRedirect(redirect) ? redirect : getRedirectByRole(role);
+      const target = data.redirect && isSafeRedirect(data.redirect)
+        ? data.redirect
+        : (redirect && isSafeRedirect(redirect) ? redirect : '/admin');
       window.location.href = target;
     } catch {
       setError('Erro de conexão. Verifique sua internet e tente novamente');
