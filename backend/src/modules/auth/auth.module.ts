@@ -33,7 +33,7 @@ function loadKey(envPath: string, fallback: string): string {
         signOptions: {
           algorithm: 'RS256',
           expiresIn: Number(process.env.JWT_ACCESS_EXPIRES ?? 900),
-          issuer: process.env.JWT_ISSUER ?? 'auth.zonadev.tech',
+          issuer: process.env.JWT_ISSUER ?? 'https://auth.zonadev.tech',
         },
       }),
     }),
