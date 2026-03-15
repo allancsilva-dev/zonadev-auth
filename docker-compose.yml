@@ -98,7 +98,7 @@ services:
       JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-604800}
       JWT_KID: ${JWT_KID:-zonadev-default}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-      ALLOWED_AUDIENCES: ${ALLOWED_AUDIENCES}
+      ALLOWED_AUDIENCES: auth.zonadev.tech,renowa.zonadev.tech,erp.zonadev.tech
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USER: ${MAIL_USER}
