@@ -115,12 +115,9 @@ services:
       start_period: 15s
       retries: 3
     networks:
-      internal:
-        aliases:
-          - zonadev-auth-backend
-      public:
-        aliases:
-          - zonadev-auth-backend
+      - internal
+      - public
+      - nginx-proxy
     logging:
       driver: "json-file"
       options:
@@ -143,7 +140,7 @@ services:
       NODE_ENV: production
       # URL interna — Server Components chamam o backend directamente pela rede Docker.
       # Nunca usar o domínio público aqui (evita roundtrip desnecessário pelo nginx).
-      API_URL: http://zonadev-auth-backend:3001
+      API_URL: http://backend:3001
       # Vars server-side do Next.js (não embutidas no bundle do cliente)
       JWT_EXPECTED_ISS: ${JWT_EXPECTED_ISS}
       JWT_EXPECTED_AUD: ${JWT_EXPECTED_AUD}
