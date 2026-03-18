@@ -6,8 +6,12 @@ import { redirect } from 'next/navigation';
 
 export async function serverFetch<T>(path: string): Promise<T> {
   const cookieStore = await cookies();
-  // Não usar ?? '' — enviar Cookie vazio pode causar comportamento inesperado no backend.
-  const token = cookieStore.get('access_token')?.value;
+  const token = cookieStore.get('admin_access_token')?.value;
+
+  if (!token) {
+    console.error(`[serverFetch] admin_access_token ausente para ${path}`);
+    redirect('/login');
+  }
 
   const controller = new AbortController();
   // Timeout de 8s — backend travado não segura a renderização SSR inteira
@@ -18,8 +22,7 @@ export async function serverFetch<T>(path: string): Promise<T> {
       cache: 'no-store', // dados de admin nunca são cacheados pelo Next
       signal: controller.signal,
       headers: {
-        // Omite o header completamente se não há token — evita access_token= vazio
-        ...(token ? { Cookie: `access_token=${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       },
     });
 

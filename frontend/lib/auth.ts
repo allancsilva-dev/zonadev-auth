@@ -13,9 +13,6 @@ export interface MeResponse {
 /**
  * Busca o utilizador autenticado no backend a partir dos cookies do servidor.
  * Deve ser usado APENAS em Server Components — nunca em 'use client'.
- *
- * IMPORTANTE: credentials: 'include' não funciona em Server Components do Next.js 15.
- * Os cookies devem ser lidos via next/headers e repassados manualmente no header Cookie.
  */
 export async function getMe(): Promise<MeResponse | null> {
   const apiUrl = process.env.API_URL;
@@ -23,17 +20,14 @@ export async function getMe(): Promise<MeResponse | null> {
 
   try {
     const cookieStore = await cookies();
-    const cookieHeader = cookieStore
-      .getAll()
-      .map((c) => `${c.name}=${c.value}`)
-      .join('; ');
+    const token = cookieStore.get('admin_access_token')?.value;
 
-    if (!cookieHeader) return null;
+    if (!token) return null;
 
     const res = await fetch(`${apiUrl}/auth/me`, {
       cache: 'no-store', // nunca cachear sessão em IdP
       headers: {
-        Cookie: cookieHeader,
+        Authorization: `Bearer ${token}`,
       },
     });
 
