@@ -2,7 +2,6 @@ import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
 import { Role } from '../common/enums/role.enum';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, StrategyOptionsWithoutRequest } from 'passport-jwt';
-import { Request } from 'express';
 
 export interface JwtPayload {
   sub: string;
@@ -25,12 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject('JWT_PUBLIC_KEY') publicKey: string,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req: Request) => {
-          return req?.cookies?.access_token ?? null;
-        },
-      ]),
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: publicKey,
       algorithms: ['RS256'],
