@@ -10,8 +10,7 @@ export class LoginDto {
 
   /**
    * Audiência (audience) do token JWT — sistema cliente que iniciou o fluxo SSO.
-   * Validado contra ALLOWED_AUDIENCES no env.
-   * TODO: migrar para tabela applications na v2.0
+    * Validado contra tabela apps (cache in-memory).
    */
   @IsNotEmpty({ message: 'Audience obrigatório' })
   @IsString()

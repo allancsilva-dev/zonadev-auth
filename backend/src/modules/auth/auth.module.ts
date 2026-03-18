@@ -9,11 +9,15 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from '../../strategies/jwt.strategy';
 import { MailModule } from '../mail/mail.module';
+import { AppCacheModule } from '../app/app-cache.module';
 import { User } from '../../entities/user.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { Subscription } from '../../entities/subscription.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
+import { App } from '../../entities/app.entity';
+import { Session } from '../../entities/session.entity';
+import { UserAppAccess } from '../../entities/user-app-access.entity';
 
 /**
  * Carrega as chaves RSA uma única vez no bootstrap via provider.
@@ -37,7 +41,17 @@ function loadKey(envPath: string, fallback: string): string {
         },
       }),
     }),
-    TypeOrmModule.forFeature([User, Tenant, Subscription, RefreshToken, AuditLog]),
+    TypeOrmModule.forFeature([
+      User,
+      Tenant,
+      Subscription,
+      RefreshToken,
+      AuditLog,
+      App,
+      Session,
+      UserAppAccess,
+    ]),
+    AppCacheModule,
     MailModule,
   ],
   controllers: [AuthController],

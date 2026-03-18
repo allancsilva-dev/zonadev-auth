@@ -6,14 +6,18 @@ import Keyv from 'keyv';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
+import { App } from '../../entities/app.entity';
+import { Session } from '../../entities/session.entity';
+import { UserAppAccess } from '../../entities/user-app-access.entity';
 import { RedisModule } from '../redis/redis.module';
 import { Subscription } from '../../entities/subscription.entity';
+import { AppCacheModule } from '../app/app-cache.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Tenant, User, Subscription]),
+    TypeOrmModule.forFeature([Tenant, User, Subscription, App, Session, UserAppAccess]),
     CacheModule.registerAsync({
       isGlobal: false,
       useFactory: () => {
@@ -35,6 +39,7 @@ import { AdminService } from './admin.service';
       },
     }),
     RedisModule,
+    AppCacheModule,
   ],
   providers: [AdminService],
   controllers: [AdminController],

@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, Not, IsNull } from 'typeorm';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import { Session } from '../entities/session.entity';
 
 @Injectable()
 export class CleanupJob {
@@ -11,6 +12,8 @@ export class CleanupJob {
   constructor(
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(Session)
+    private readonly sessionRepo: Repository<Session>,
   ) {}
 
   /**
@@ -42,8 +45,20 @@ export class CleanupJob {
       const total =
         (revokedResult.affected ?? 0) + (expiredResult.affected ?? 0);
 
+      const revokedSessions = await this.sessionRepo.delete({
+        revokedAt: Not(IsNull()),
+      });
+
+      const expiredSessions = await this.sessionRepo.delete({
+        expiresAt: LessThan(now),
+        revokedAt: IsNull(),
+      });
+
+      const sessionsTotal =
+        (revokedSessions.affected ?? 0) + (expiredSessions.affected ?? 0);
+
       this.logger.log(
-        `Cleanup concluído: ${revokedResult.affected} revogados + ${expiredResult.affected} expirados removidos (total: ${total})`,
+        `Cleanup concluido: refresh=${total}, sessions=${sessionsTotal}`,
       );
     } catch (err) {
       this.logger.error(`Falha no cleanup job: ${err}`);

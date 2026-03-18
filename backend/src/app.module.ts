@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { HealthModule } from './modules/health/health.module';
+import { AppCacheModule } from './modules/app/app-cache.module';
 import { CleanupJob } from './jobs/cleanup.job';
 
 import { Tenant } from './entities/tenant.entity';
@@ -20,6 +21,9 @@ import { Plan } from './entities/plan.entity';
 import { Subscription } from './entities/subscription.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { AuditLog } from './entities/audit-log.entity';
+import { App } from './entities/app.entity';
+import { Session } from './entities/session.entity';
+import { UserAppAccess } from './entities/user-app-access.entity';
 
 @Module({
   imports: [
@@ -30,7 +34,17 @@ import { AuditLog } from './entities/audit-log.entity';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [Tenant, User, Plan, Subscription, RefreshToken, AuditLog],
+      entities: [
+        Tenant,
+        User,
+        Plan,
+        Subscription,
+        RefreshToken,
+        AuditLog,
+        App,
+        Session,
+        UserAppAccess,
+      ],
       synchronize: false, // Nunca synchronize em produção — usar migrations
       logging: process.env.NODE_ENV === 'development',
     }),
@@ -58,9 +72,10 @@ import { AuditLog } from './entities/audit-log.entity';
     PlansModule,
     SubscriptionsModule,
     HealthModule,
+    AppCacheModule,
 
-    // CleanupJob precisa do RefreshToken via TypeORM
-    TypeOrmModule.forFeature([RefreshToken]),
+    // CleanupJob precisa de acesso às sessões/tokens
+    TypeOrmModule.forFeature([RefreshToken, Session]),
   ],
   providers: [
     CleanupJob,

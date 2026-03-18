@@ -1,15 +1,28 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
 import { Subscription } from '../../entities/subscription.entity';
+import { Session } from '../../entities/session.entity';
+import { UserAppAccess } from '../../entities/user-app-access.entity';
+import { App } from '../../entities/app.entity';
 import { SubscriptionStatus } from '../../common/enums/subscription-status.enum';
 import { AdminStatsDto } from './dto/admin-stats.dto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import type Redis from 'ioredis';
 import { randomUUID } from 'crypto';
+import { ManageAppAccessDto } from './dto/manage-app-access.dto';
+import { JwtPayload } from '../../strategies/jwt.strategy';
+import { CreateAppDto } from './dto/create-app.dto';
+import { UpdateAppDto } from './dto/update-app.dto';
+import { AppCacheService } from '../app/app-cache.service';
 
 @Injectable()
 export class AdminService {
@@ -18,8 +31,12 @@ export class AdminService {
     @InjectRepository(Tenant) private readonly tenantRepo: Repository<Tenant>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Subscription) private readonly subscriptionRepo: Repository<Subscription>,
+    @InjectRepository(Session) private readonly sessionRepo: Repository<Session>,
+    @InjectRepository(UserAppAccess) private readonly uaaRepo: Repository<UserAppAccess>,
+    @InjectRepository(App) private readonly appRepo: Repository<App>,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis,
+    private readonly appCacheService: AppCacheService,
   ) {}
 
   private isValidCache(data: unknown): data is AdminStatsDto {
@@ -133,5 +150,100 @@ export class AdminService {
     }
 
     return result;
+  }
+
+  async killSessions(userId: string): Promise<{ message: string }> {
+    await this.sessionRepo.update(
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+
+    return { message: 'Todas as sessoes revogadas' };
+  }
+
+  async getAppAccess(userId: string): Promise<{ data: UserAppAccess[] }> {
+    const accesses = await this.uaaRepo.find({
+      where: { userId, revokedAt: IsNull() },
+      relations: ['app'],
+    });
+
+    return { data: accesses };
+  }
+
+  async manageAppAccess(
+    userId: string,
+    dto: ManageAppAccessDto,
+    admin: JwtPayload,
+  ): Promise<{ success: boolean }> {
+    const app = this.appCacheService.getAppBySlug(dto.appSlug);
+    if (!app) throw new BadRequestException('App nao encontrada');
+
+    if (dto.action === 'grant') {
+      const existing = await this.uaaRepo.findOne({
+        where: { userId, appId: app.id },
+      });
+
+      if (existing) {
+        await this.uaaRepo.update(
+          { id: existing.id },
+          {
+            status: 'active',
+            defaultRole: dto.defaultRole ?? existing.defaultRole ?? 'viewer',
+            revokedAt: null,
+            grantedBy: admin.sub,
+          },
+        );
+      } else {
+        await this.uaaRepo.save({
+          userId,
+          appId: app.id,
+          defaultRole: dto.defaultRole ?? 'viewer',
+          status: 'active',
+          grantedBy: admin.sub,
+        });
+      }
+    } else {
+      await this.uaaRepo.update(
+        { userId, appId: app.id, revokedAt: IsNull() },
+        { revokedAt: new Date() },
+      );
+    }
+
+    return { success: true };
+  }
+
+  async listApps(): Promise<{ data: App[] }> {
+    const apps = await this.appRepo.find({ order: { createdAt: 'ASC' } });
+    return { data: apps };
+  }
+
+  async createApp(dto: CreateAppDto): Promise<{ data: App }> {
+    const app = await this.appRepo.save({
+      slug: dto.slug,
+      name: dto.name,
+      audience: dto.audience,
+      allowOrigin: dto.allowOrigin,
+      active: dto.active ?? true,
+    });
+
+    await this.appCacheService.reload();
+    return { data: app };
+  }
+
+  async updateApp(id: string, dto: UpdateAppDto): Promise<{ success: boolean }> {
+    const payload: Partial<App> = {};
+    if (dto.name !== undefined) payload.name = dto.name;
+    if (dto.audience !== undefined) payload.audience = dto.audience;
+    if (dto.allowOrigin !== undefined) payload.allowOrigin = dto.allowOrigin;
+    if (dto.active !== undefined) payload.active = dto.active;
+
+    await this.appRepo.update(id, payload);
+    await this.appCacheService.reload();
+    return { success: true };
+  }
+
+  async reloadAppsCache(): Promise<{ success: boolean }> {
+    await this.appCacheService.reload();
+    return { success: true };
   }
 }

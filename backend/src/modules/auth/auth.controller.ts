@@ -39,13 +39,16 @@ export class AuthController {
     return this.authService.login(dto, req, res);
   }
 
-  // ─── Refresh ───────────────────────────────────────────────────────────────
-  // Rate limit: 30 req / min — proteção contra flood de refresh token
-  @Post('auth/refresh')
+  // ─── OAuth Token Exchange ──────────────────────────────────────────────────
+  @Get('oauth/token')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  async refresh(@Req() req: Request, @Res() res: Response) {
-    return this.authService.refresh(req, res);
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  async issueAppToken(
+    @Query('aud') aud: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    return this.authService.issueAppToken(aud, req, res);
   }
 
   // ─── Logout ────────────────────────────────────────────────────────────────

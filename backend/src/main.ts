@@ -5,6 +5,7 @@ import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AppCacheService } from './modules/app/app-cache.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -17,13 +18,12 @@ async function bootstrap() {
   // Cookie parser — necessário para ler cookies HTTP-only
   app.use(cookieParser());
 
-  // CORS — credenciais obrigatório para cookies cross-subdomain
-  // NUNCA usar origin: '*' com credentials — browser rejeita
-  // TODO v2.0: migrar para função dinâmica ao suportar domínios customizados por cliente
+  const appCacheService = app.get(AppCacheService);
+
+  // CORS dinâmico — apps e origins são carregados do banco via cache in-memory
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean);
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || appCacheService.isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS policy`));

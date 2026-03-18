@@ -6,13 +6,26 @@ import { Plan } from '../entities/plan.entity';
 import { Subscription } from '../entities/subscription.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { AuditLog } from '../entities/audit-log.entity';
+import { App } from '../entities/app.entity';
+import { Session } from '../entities/session.entity';
+import { UserAppAccess } from '../entities/user-app-access.entity';
 
 dotenv.config();
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [Tenant, User, Plan, Subscription, RefreshToken, AuditLog],
+  entities: [
+    Tenant,
+    User,
+    Plan,
+    Subscription,
+    RefreshToken,
+    AuditLog,
+    App,
+    Session,
+    UserAppAccess,
+  ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',

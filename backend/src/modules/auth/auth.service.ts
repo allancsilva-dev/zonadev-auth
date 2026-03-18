@@ -7,15 +7,17 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, Not, IsNull } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Response, Request } from 'express';
 import * as bcryptjs from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
 import { User } from '../../entities/user.entity';
 import { Subscription } from '../../entities/subscription.entity';
-import { RefreshToken } from '../../entities/refresh-token.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
+import { Session } from '../../entities/session.entity';
+import { UserAppAccess } from '../../entities/user-app-access.entity';
+import { App } from '../../entities/app.entity';
 import { SubscriptionStatus } from '../../common/enums/subscription-status.enum';
 import { AuditAction } from '../../common/enums/audit-action.enum';
 import { generateToken, sha256 } from '../../common/utils/hash.util';
@@ -24,27 +26,22 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from '../mail/mail.service';
+import { AppCacheService } from '../app/app-cache.service';
 
-// NOTE: DUMMY_HASH moved into class to avoid global hardcoded value
-
-// Limite de sessões simultâneas por usuário (LRU)
 const MAX_SESSIONS = 10;
-// Limite de sessões para verificar antes de remover
 const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  // DUMMY_HASH gerado dinamicamente para evitar dependência de hash hardcoded
   private static readonly DUMMY_HASH: string = bcryptjs.hashSync(
     'dummy-placeholder-zonadev',
     12,
   );
 
   private readonly accessExpires: number;
-  private readonly refreshExpires: number;
-  private readonly allowedAudiences: string[];
+  private readonly sessionExpires: number;
   private readonly jwtKid: string;
   private readonly isProduction: boolean;
 
@@ -52,19 +49,19 @@ export class AuthService {
     @Inject('JWT_PUBLIC_KEY') private readonly publicKey: string,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly appCacheService: AppCacheService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Subscription) private readonly subscriptionRepo: Repository<Subscription>,
-    @InjectRepository(RefreshToken) private readonly refreshTokenRepo: Repository<RefreshToken>,
     @InjectRepository(AuditLog) private readonly auditLogRepo: Repository<AuditLog>,
+    @InjectRepository(Session) private readonly sessionRepo: Repository<Session>,
+    @InjectRepository(UserAppAccess) private readonly uaaRepo: Repository<UserAppAccess>,
+    @InjectRepository(App) private readonly appRepo: Repository<App>,
   ) {
     this.accessExpires = Number(process.env.JWT_ACCESS_EXPIRES ?? 900);
-    this.refreshExpires = Number(process.env.JWT_REFRESH_EXPIRES ?? 604800);
-    this.allowedAudiences = (process.env.ALLOWED_AUDIENCES ?? '').split(',').filter(Boolean);
+    this.sessionExpires = Number(process.env.SESSION_EXPIRES ?? 604800);
     this.jwtKid = process.env.JWT_KID ?? 'zonadev-default';
     this.isProduction = process.env.NODE_ENV === 'production';
   }
-
-  // ─── Me ────────────────────────────────────────────────────────────────────
 
   getMe(user: import('../../strategies/jwt.strategy').JwtPayload) {
     return {
@@ -76,20 +73,6 @@ export class AuthService {
       plan: user.plan,
     };
   }
-
-  // ─── Cookie Options ────────────────────────────────────────────────────────
-
-  private getCookieOptions(maxAgeMs: number) {
-    return {
-      httpOnly: true,
-      secure: this.isProduction,
-      sameSite: 'none' as const,
-      domain: this.isProduction ? '.zonadev.tech' : undefined,
-      maxAge: maxAgeMs,
-    };
-  }
-
-  // ─── Audit Log ─────────────────────────────────────────────────────────────
 
   private async audit(
     action: AuditAction,
@@ -111,14 +94,85 @@ export class AuthService {
     }
   }
 
-  // ─── Validate Audience ─────────────────────────────────────────────────────
+  async issueAppToken(aud: string, req: Request, res: Response): Promise<void> {
+    const sid = req.cookies?.zonadev_sid;
+    if (!sid) throw new UnauthorizedException('Sessao ausente');
 
-  private isValidAudience(aud: string): boolean {
-    // TODO: migrar para tabela applications na v2.0
-    return this.allowedAudiences.includes(aud);
+    const session = await this.sessionRepo.findOne({
+      where: { tokenHash: sha256(sid), revokedAt: IsNull() },
+      relations: ['user', 'user.tenant'],
+    });
+
+    if (!session || session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Sessao expirada');
+    }
+
+    const app = this.appCacheService.getAppByAudience(aud);
+    if (!app) {
+      throw new UnauthorizedException('Aplicacao nao autorizada');
+    }
+
+    const access = await this.uaaRepo.findOne({
+      where: {
+        userId: session.user.id,
+        appId: app.id,
+        status: 'active',
+        revokedAt: IsNull(),
+      },
+    });
+
+    if (!access) {
+      throw new UnauthorizedException('Sem acesso a esta aplicacao');
+    }
+
+    if (!session.user.active) {
+      throw new UnauthorizedException('Usuario desativado');
+    }
+
+    if (session.user.tenant && !session.user.tenant.active) {
+      throw new UnauthorizedException('Tenant desativado');
+    }
+
+    if (session.user.tenantId) {
+      const subscription = await this.subscriptionRepo
+        .createQueryBuilder('s')
+        .where('s.tenant_id = :tenantId', { tenantId: session.user.tenantId })
+        .andWhere('s.status = :status', { status: SubscriptionStatus.ACTIVE })
+        .andWhere('s.expires_at > now()')
+        .getOne();
+
+      if (!subscription) {
+        throw new UnauthorizedException('Licenca expirada');
+      }
+    }
+
+    const jti = uuidv4();
+    const jwt = this.jwtService.sign(
+      {
+        sub: session.user.id,
+        email: session.user.email,
+        jti,
+        tokenVersion: session.user.tokenVersion,
+        tenantId: session.user.tenantId,
+        tenantSubdomain: session.user.tenant?.subdomain ?? null,
+        plan: session.user.tenant?.plan ?? null,
+        roles: session.user.roles,
+        defaultRole: access.defaultRole,
+        aud,
+      },
+      {
+        algorithm: 'RS256',
+        expiresIn: this.accessExpires,
+        header: { kid: this.jwtKid, alg: 'RS256' },
+      },
+    );
+
+    res.json({
+      access_token: jwt,
+      expires_in: this.accessExpires,
+      default_role: access.defaultRole,
+    });
   }
-
-  // ─── Login ─────────────────────────────────────────────────────────────────
 
   async login(dto: LoginDto, req: Request, res: Response): Promise<void> {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
@@ -126,52 +180,60 @@ export class AuthService {
       ?? 'unknown';
     const userAgent = req.headers['user-agent'] ?? 'unknown';
 
-    // 1. Busca user por email
     const user = await this.userRepo.findOne({
       where: { email: dto.email.toLowerCase().trim() },
       relations: ['tenant'],
     });
 
-    // 2. Anti-timing + Anti-enumeration:
-    // Se usuário não existe, gasta o tempo do bcrypt mesmo assim.
-    // Resposta idêntica para "usuário não encontrado" e "senha errada".
     if (!user) {
       await bcryptjs.compare(dto.password, AuthService.DUMMY_HASH);
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent);
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    // 3. Valida senha
     const isPasswordValid = await bcryptjs.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    // 4. Verifica email verificado — motivo real apenas no audit_log
     if (!user.emailVerifiedAt) {
       await this.audit(AuditAction.LOGIN_BLOCKED_EMAIL_NOT_VERIFIED, ip, userAgent, user.id, user.tenantId ?? undefined);
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    // 5. Valida audience
-    if (!this.isValidAudience(dto.aud)) {
+    const app = this.appCacheService.getAppByAudience(dto.aud);
+    if (!app) {
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
-      throw new UnauthorizedException('Aplicação não autorizada');
+      throw new UnauthorizedException('Aplicacao nao autorizada');
     }
 
-    // 6. Verifica user.active e tenant.active
+    if (app.slug !== 'admin') {
+      const appAccess = await this.uaaRepo.findOne({
+        where: {
+          userId: user.id,
+          appId: app.id,
+          status: 'active',
+          revokedAt: IsNull(),
+        },
+      });
+
+      if (!appAccess) {
+        await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
+        throw new UnauthorizedException('Sem acesso a esta aplicacao');
+      }
+    }
+
     if (!user.active) {
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
     if (user.tenant && !user.tenant.active) {
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    // 7. Valida subscription (apenas para usuários com tenant)
     if (user.tenantId) {
       const subscription = await this.subscriptionRepo
         .createQueryBuilder('s')
@@ -182,198 +244,51 @@ export class AuthService {
 
       if (!subscription) {
         await this.audit(AuditAction.LICENSE_EXPIRED, ip, userAgent, user.id, user.tenantId);
-        throw new UnauthorizedException('Licença inválida ou expirada');
+        throw new UnauthorizedException('Licenca invalida ou expirada');
       }
     }
 
-    // 8. Verifica sessões ativas — se ≥ MAX_SESSIONS, remove a mais antiga (LRU)
-    await this.refreshTokenRepo.manager.transaction(async (em) => {
+    await this.sessionRepo.manager.transaction(async (em) => {
       const activeSessions = await em
-        .createQueryBuilder(RefreshToken, 'rt')
-        .where('rt.user_id = :userId', { userId: user.id })
-        .andWhere('rt.revoked_at IS NULL')
-        .andWhere('rt.expires_at > NOW()')
-        .orderBy('rt.created_at', 'ASC')
+        .createQueryBuilder(Session, 's')
+        .where('s.user_id = :userId', { userId: user.id })
+        .andWhere('s.revoked_at IS NULL')
+        .andWhere('s.expires_at > NOW()')
+        .orderBy('s.created_at', 'ASC')
         .setLock('pessimistic_write')
         .getMany();
 
       if (activeSessions.length >= MAX_SESSIONS) {
-        const oldest = activeSessions[0];
-        await em.update(RefreshToken, oldest.id, { revokedAt: new Date() });
+        await em.update(Session, activeSessions[0].id, { revokedAt: new Date() });
       }
     });
 
-    // 9. Gera access token RS256
-    const jti = uuidv4();
-    const accessToken = this.jwtService.sign(
-      {
-        sub: user.id,
-        email: user.email,
-        jti,
-        tokenVersion: user.tokenVersion,
-        tenantId: user.tenantId,
-        tenantSubdomain: user.tenant?.subdomain ?? null,
-        plan: user.tenant?.plan ?? null,
-        roles: user.roles,
-        aud: dto.aud,
-      },
-      {
-        algorithm: 'RS256',
-        expiresIn: this.accessExpires,
-        header: { kid: this.jwtKid, alg: 'RS256' },
-      },
-    );
+    const rawSid = generateToken(64);
+    const sidHash = sha256(rawSid);
+    const sessionExpiresAt = new Date(Date.now() + this.sessionExpires * 1000);
 
-    // 10. Gera refresh token e salva SHA-256 no banco
-    const rawRefreshToken = generateToken(64);
-    const tokenHash = sha256(rawRefreshToken);
-    const expiresAt = new Date(Date.now() + this.refreshExpires * 1000);
-
-    await this.refreshTokenRepo.save({
+    await this.sessionRepo.save({
       userId: user.id,
-      tokenHash,
-      expiresAt,
-      aud: dto.aud,
+      tokenHash: sidHash,
+      ipAddress: ip,
+      userAgent,
+      expiresAt: sessionExpiresAt,
     });
 
-    // 11. Registra audit
+    res.cookie('zonadev_sid', rawSid, {
+      httpOnly: true,
+      secure: this.isProduction,
+      sameSite: 'lax',
+      domain: this.isProduction ? '.zonadev.tech' : undefined,
+      maxAge: this.sessionExpires * 1000,
+      path: '/',
+    });
+
     await this.audit(AuditAction.LOGIN_SUCCESS, ip, userAgent, user.id, user.tenantId ?? undefined);
 
-    // 12. Seta cookies HTTP-only com domain condicional
-    res.cookie('access_token', accessToken, this.getCookieOptions(this.accessExpires * 1000));
-    res.cookie('refresh_token', rawRefreshToken, this.getCookieOptions(this.refreshExpires * 1000));
-
-    // 13. Valida redirect — isSafeRedirect robusto (não passa por URL parser apenas)
     const redirectUrl = isSafeRedirect(dto.redirect ?? '') ? dto.redirect! : SAFE_REDIRECT_FALLBACK;
-
     res.json({ success: true, redirect: redirectUrl });
   }
-
-  // ─── Refresh ───────────────────────────────────────────────────────────────
-
-  async refresh(req: Request, res: Response): Promise<void> {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-      ?? req.ip
-      ?? 'unknown';
-    const userAgent = req.headers['user-agent'] ?? 'unknown';
-
-    const rawToken: string = req.cookies?.refresh_token;
-    if (!rawToken) {
-      throw new UnauthorizedException('Refresh token ausente');
-    }
-
-    const tokenHash = sha256(rawToken);
-
-    // 1. Busca token no banco
-    const tokenRecord = await this.refreshTokenRepo.findOne({
-      where: { tokenHash },
-      relations: ['user', 'user.tenant'],
-    });
-
-    if (!tokenRecord) {
-      throw new UnauthorizedException('Token inválido');
-    }
-
-    // 2. TOKEN_REUSE_DETECTED — revogar TODAS as sessões do usuário
-    if (tokenRecord.revokedAt) {
-      await this.refreshTokenRepo.update(
-        { userId: tokenRecord.userId },
-        { revokedAt: new Date() },
-      );
-      await this.audit(AuditAction.TOKEN_REUSE_DETECTED, ip, userAgent, tokenRecord.userId);
-      throw new UnauthorizedException('Token inválido');
-    }
-
-    const user = tokenRecord.user;
-
-    // 4. Revoga token atual (rotation obrigatória) — operação atômica
-    const result = await this.refreshTokenRepo
-      .createQueryBuilder()
-      .update(RefreshToken)
-      .set({ revokedAt: new Date() })
-      .where('id = :id AND revoked_at IS NULL AND expires_at > NOW()', { id: tokenRecord.id })
-      .execute();
-
-    if (result.affected === 0) {
-      throw new UnauthorizedException('Token inválido');
-    }
-
-    // 5. Valida tokenVersion — se senha foi alterada, rejeitar
-    const freshUser = await this.userRepo.findOne({
-      where: { id: user.id },
-      relations: ['tenant'],
-    });
-
-    if (!freshUser || freshUser.tokenVersion !== user.tokenVersion) {
-      throw new UnauthorizedException('Sessão inválida');
-    }
-
-    if (!freshUser.active || (freshUser.tenant && !freshUser.tenant.active)) {
-      throw new UnauthorizedException('Acesso negado');
-    }
-
-    // 6. Revalida subscription
-    if (freshUser.tenantId) {
-      const subscription = await this.subscriptionRepo
-        .createQueryBuilder('s')
-        .where('s.tenant_id = :tenantId', { tenantId: freshUser.tenantId })
-        .andWhere('s.status = :status', { status: SubscriptionStatus.ACTIVE })
-        .andWhere('s.expires_at > now()')
-        .getOne();
-
-      if (!subscription) {
-        await this.audit(AuditAction.LICENSE_EXPIRED, ip, userAgent, freshUser.id, freshUser.tenantId);
-        throw new UnauthorizedException('Licença expirada');
-      }
-    }
-
-    // 7. Emite novos tokens
-    const jti = uuidv4();
-
-    // Precisamos saber o aud original — lemos do token expirado de forma confiável
-    // (o refresh não passa pelo JWT guard, precisamos ler o aud do cookie anterior)
-    // Como o access token pode ter expirado, usamos o aud do env como fallback seguro
-    const aud = tokenRecord.aud ?? this.allowedAudiences[0] ?? 'auth.zonadev.tech';
-
-    const newAccessToken = this.jwtService.sign(
-      {
-        sub: freshUser.id,
-        email: freshUser.email,
-        jti,
-        tokenVersion: freshUser.tokenVersion,
-        tenantId: freshUser.tenantId,
-        tenantSubdomain: freshUser.tenant?.subdomain ?? null,
-        plan: freshUser.tenant?.plan ?? null,
-        roles: freshUser.roles,
-        aud,
-      },
-      {
-        algorithm: 'RS256',
-        expiresIn: this.accessExpires,
-        header: { kid: this.jwtKid, alg: 'RS256' },
-      },
-    );
-
-    const newRawRefreshToken = generateToken(64);
-    const newTokenHash = sha256(newRawRefreshToken);
-    const expiresAt = new Date(Date.now() + this.refreshExpires * 1000);
-
-    await this.refreshTokenRepo.save({
-      userId: freshUser.id,
-      tokenHash: newTokenHash,
-      expiresAt,
-      aud: tokenRecord.aud ?? null,
-    });
-
-    await this.audit(AuditAction.TOKEN_REFRESHED, ip, userAgent, freshUser.id, freshUser.tenantId ?? undefined);
-
-    res.cookie('access_token', newAccessToken, this.getCookieOptions(this.accessExpires * 1000));
-    res.cookie('refresh_token', newRawRefreshToken, this.getCookieOptions(this.refreshExpires * 1000));
-
-    res.json({ success: true });
-  }
-
-  // ─── Logout ────────────────────────────────────────────────────────────────
 
   async logout(req: Request, res: Response): Promise<void> {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
@@ -381,46 +296,56 @@ export class AuthService {
       ?? 'unknown';
     const userAgent = req.headers['user-agent'] ?? 'unknown';
 
-    const rawToken: string = req.cookies?.refresh_token;
-
-    if (rawToken) {
-      const tokenHash = sha256(rawToken);
-      await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
+    const sid = req.cookies?.zonadev_sid;
+    if (sid) {
+      await this.sessionRepo.update(
+        { tokenHash: sha256(sid) },
+        { revokedAt: new Date() },
+      );
     }
 
-    const clearOptions = {
+    res.clearCookie('zonadev_sid', {
+      httpOnly: true,
+      secure: this.isProduction,
+      sameSite: 'lax',
+      domain: this.isProduction ? '.zonadev.tech' : undefined,
+      path: '/',
+    });
+
+    const clearOld = {
       httpOnly: true,
       secure: this.isProduction,
       sameSite: 'none' as const,
       domain: this.isProduction ? '.zonadev.tech' : undefined,
+      path: '/',
     };
 
-    res.clearCookie('access_token', clearOptions);
-    res.clearCookie('refresh_token', clearOptions);
+    res.clearCookie('access_token', clearOld);
+    res.clearCookie('refresh_token', clearOld);
 
-    // Tenta registrar quem fez logout se tiver user no request (JWT guard opcional)
     const userId = (req as any).user?.sub;
     await this.audit(AuditAction.LOGOUT, ip, userAgent, userId);
 
-    res.json({ success: true });
+    const apps = await this.appRepo.find({ where: { active: true } });
+    const logoutUrls = apps
+      .filter((a) => a.slug !== 'admin')
+      .map((a) => `${a.allowOrigin}/api/auth/local-logout`);
+
+    res.json({ success: true, logoutUrls });
   }
 
-  // ─── Forgot Password ───────────────────────────────────────────────────────
-
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
-    // Resposta sempre a mesma independente de o e-mail existir (anti-enumeration)
     const user = await this.userRepo.findOne({
       where: { email: dto.email.toLowerCase().trim() },
     });
 
     if (!user) {
-      // Simula processamento para evitar timing attack
       return;
     }
 
-    const rawToken = generateToken(32); // 64 chars hex
+    const rawToken = generateToken(32);
     const tokenHash = sha256(rawToken);
-    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    const expires = new Date(Date.now() + 60 * 60 * 1000);
 
     await this.userRepo.update(user.id, {
       passwordResetToken: tokenHash,
@@ -430,8 +355,6 @@ export class AuthService {
     await this.mailService.sendResetPassword(user.email, rawToken);
   }
 
-  // ─── Reset Password ────────────────────────────────────────────────────────
-
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
     const tokenHash = sha256(dto.token);
 
@@ -440,7 +363,7 @@ export class AuthService {
     });
 
     if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
-      throw new BadRequestException('Token inválido ou expirado');
+      throw new BadRequestException('Token invalido ou expirado');
     }
 
     const newHash = await bcryptjs.hash(dto.password, BCRYPT_ROUNDS);
@@ -449,7 +372,7 @@ export class AuthService {
       passwordHash: newHash,
       passwordResetToken: null,
       passwordResetExpires: null,
-      tokenVersion: user.tokenVersion + 1, // invalida todas as sessões ativas
+      tokenVersion: user.tokenVersion + 1,
     });
 
     await this.auditLogRepo.save({
@@ -461,11 +384,7 @@ export class AuthService {
     });
   }
 
-  // ─── Verify Email ──────────────────────────────────────────────────────────
-
   async verifyEmail(rawToken: string, res: Response): Promise<void> {
-    // rawToken enviado por e-mail, SHA-256 armazenado em emailVerificationToken
-    // Campo dedicado — separado de passwordResetToken (fluxos distintos)
     const tokenHash = sha256(rawToken);
 
     const user = await this.userRepo.findOne({
@@ -473,7 +392,7 @@ export class AuthService {
     });
 
     if (!user || !user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
-      throw new BadRequestException('Link de verificação inválido ou expirado');
+      throw new BadRequestException('Link de verificacao invalido ou expirado');
     }
 
     await this.userRepo.update(user.id, {
@@ -485,8 +404,6 @@ export class AuthService {
 
     res.json({ success: true, message: 'E-mail verificado com sucesso' });
   }
-
-  // ─── JWKS ──────────────────────────────────────────────────────────────────
 
   getPublicKey(): string {
     return this.publicKey;
