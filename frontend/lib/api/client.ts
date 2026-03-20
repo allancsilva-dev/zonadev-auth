@@ -2,36 +2,6 @@
 
 import { ApiError } from '@/types/api-error';
 
-let isRefreshing = false;
-let waitQueue: Array<(success: boolean) => void> = [];
-
-function resolveQueue(success: boolean) {
-  waitQueue.forEach(cb => cb(success));
-  waitQueue = [];
-}
-
-async function tryRefresh(): Promise<boolean> {
-  // Se já há um refresh em andamento, entra na fila e aguarda
-  if (isRefreshing) {
-    return new Promise(resolve => waitQueue.push(resolve));
-  }
-
-  isRefreshing = true;
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    resolveQueue(res.ok);
-    return res.ok;
-  } catch {
-    resolveQueue(false);
-    return false;
-  } finally {
-    isRefreshing = false;
-  }
-}
-
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {}
@@ -40,7 +10,7 @@ export async function apiRequest<T>(
   const timeout = setTimeout(() => controller.abort(), 10_000);
 
   const doFetch = () =>
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
+    fetch(`/api${path}`, {
       ...options,
       credentials: 'include',
       signal: controller.signal,
@@ -55,12 +25,8 @@ export async function apiRequest<T>(
     let res = await doFetch();
 
     if (res.status === 401) {
-      const refreshed = await tryRefresh();
-      if (!refreshed) {
-        window.location.href = '/login';
-        throw new Error('Sessão expirada. Redirecionando para o login.');
-      }
-      res = await doFetch(); // repete com os novos cookies
+      window.location.href = '/login';
+      throw new Error('Sessão expirada. Redirecionando para o login.');
     }
 
     // 403: usuário autenticado mas sem permissão — não tenta refresh
