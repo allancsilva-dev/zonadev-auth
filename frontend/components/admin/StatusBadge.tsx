@@ -2,24 +2,34 @@ import { SubscriptionStatus } from '@/types/subscription';
 
 const styles: Record<string, string> = {
   ACTIVE: 'bg-emerald-900 text-emerald-300',
+  active: 'bg-emerald-900 text-emerald-300',
   EXPIRED: 'bg-red-900 text-red-300',
   CANCELLED: 'bg-slate-700 text-slate-400',
   SUSPENDED: 'bg-yellow-900 text-yellow-300',
+  PENDING: 'bg-yellow-900 text-yellow-300',
+  pending: 'bg-yellow-900 text-yellow-300',
+  FAILED: 'bg-red-900 text-red-300',
+  failed: 'bg-red-900 text-red-300',
   true: 'bg-emerald-900 text-emerald-300',
   false: 'bg-red-900 text-red-300',
 };
 
 const labels: Record<string, string> = {
   ACTIVE: 'Ativo',
+  active: 'Ativo',
   EXPIRED: 'Expirado',
   CANCELLED: 'Cancelado',
   SUSPENDED: 'Suspenso',
+  PENDING: 'Pendente',
+  pending: 'Pendente',
+  FAILED: 'Falhou',
+  failed: 'Falhou',
   true: 'Ativo',
   false: 'Inativo',
 };
 
 interface StatusBadgeProps {
-  status: SubscriptionStatus | boolean;
+  status: SubscriptionStatus | boolean | string;
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {

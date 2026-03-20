@@ -22,14 +22,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!user) redirect('/login');
 
   // Apenas SUPERADMIN e ADMIN acedem ao painel
-  if (!['SUPERADMIN', 'ADMIN'].includes(user.role)) {
+  const effectiveRole = user.roles?.[0] ?? user.role;
+  if (!['SUPERADMIN', 'ADMIN'].includes(effectiveRole)) {
     redirect(getRedirectByRole(user.role));
   }
 
   const authUser = {
     sub: user.sub,
     email: user.email,
-    role: user.role,
+    role: effectiveRole,
+    roles: user.roles,
     tenantId: user.tenantId,
     plan: user.plan,
   };

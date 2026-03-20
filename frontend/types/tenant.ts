@@ -6,6 +6,7 @@ export interface Tenant {
   subdomain: string;
   plan: PlanType;
   active: boolean;
+  provisionStatus?: 'pending' | 'active' | 'failed';
   createdAt: string;
   updatedAt: string;
 }
@@ -13,6 +14,8 @@ export interface Tenant {
 export interface CreateTenantPayload {
   name: string;
   subdomain: string;
+  ownerAuthUserId: string;
+  ownerEmail: string;
   plan?: PlanType;
   active?: boolean;
 }

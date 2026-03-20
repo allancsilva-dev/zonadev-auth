@@ -9,6 +9,15 @@ export class UpdateAppDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  domain?: string;
+
+  @IsOptional()
+  @IsString()
+  baseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   audience?: string;
 
   @IsOptional()

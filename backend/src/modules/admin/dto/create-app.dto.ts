@@ -14,11 +14,20 @@ export class CreateAppDto {
   @IsNotEmpty()
   @IsString()
   @MaxLength(255)
-  audience: string;
+  domain: string;
 
   @IsNotEmpty()
   @IsString()
-  allowOrigin: string;
+  baseUrl: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  audience?: string;
+
+  @IsOptional()
+  @IsString()
+  allowOrigin?: string;
 
   @IsOptional()
   @IsBoolean()

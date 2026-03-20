@@ -8,6 +8,7 @@ export const tenantSchema = z.object({
     .max(100)
     .regex(/^[a-z0-9-]+$/, 'Apenas letras minúsculas, números e hífens'),
   plan: z.enum(['FREE', 'STARTER', 'PRO', 'ENTERPRISE']),
+  ownerEmail: z.string().email('Informe um e-mail válido para o admin inicial'),
   active: z.boolean().default(true),
 });
 

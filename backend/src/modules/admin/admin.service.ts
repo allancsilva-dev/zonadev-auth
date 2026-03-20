@@ -3,6 +3,7 @@ import {
   Inject,
   Logger,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
@@ -218,11 +219,29 @@ export class AdminService {
   }
 
   async createApp(dto: CreateAppDto): Promise<{ data: App }> {
+    const slugNorm = dto.slug.toLowerCase().trim();
+    const domainNorm = (dto.domain ?? dto.audience ?? '').toLowerCase().trim();
+
+    if (!domainNorm.startsWith(`${slugNorm}.`)) {
+      throw new BadRequestException(
+        `Slug "${slugNorm}" deve ser o prefixo do domain "${domainNorm}" (ex: erp -> erp.zonadev.tech)`,
+      );
+    }
+
+    const existing = await this.appRepo.findOne({ where: [{ domain: domainNorm }, { audience: domainNorm }] });
+    if (existing) {
+      throw new ConflictException(`App com domain '${domainNorm}' já existe`);
+    }
+
+    const baseUrlNorm = (dto.baseUrl ?? dto.allowOrigin ?? `https://${domainNorm}`).toLowerCase().trim();
+
     const app = await this.appRepo.save({
-      slug: dto.slug,
+      slug: slugNorm,
       name: dto.name,
-      audience: dto.audience,
-      allowOrigin: dto.allowOrigin,
+      domain: domainNorm,
+      baseUrl: baseUrlNorm,
+      audience: domainNorm,
+      allowOrigin: baseUrlNorm,
       active: dto.active ?? true,
     });
 
@@ -233,8 +252,19 @@ export class AdminService {
   async updateApp(id: string, dto: UpdateAppDto): Promise<{ success: boolean }> {
     const payload: Partial<App> = {};
     if (dto.name !== undefined) payload.name = dto.name;
-    if (dto.audience !== undefined) payload.audience = dto.audience;
-    if (dto.allowOrigin !== undefined) payload.allowOrigin = dto.allowOrigin;
+
+    if (dto.domain !== undefined || dto.audience !== undefined) {
+      const domainNorm = (dto.domain ?? dto.audience ?? '').toLowerCase().trim();
+      payload.domain = domainNorm;
+      payload.audience = domainNorm;
+    }
+
+    if (dto.baseUrl !== undefined || dto.allowOrigin !== undefined) {
+      const baseUrlNorm = (dto.baseUrl ?? dto.allowOrigin ?? '').toLowerCase().trim();
+      payload.baseUrl = baseUrlNorm;
+      payload.allowOrigin = baseUrlNorm;
+    }
+
     if (dto.active !== undefined) payload.active = dto.active;
 
     await this.appRepo.update(id, payload);

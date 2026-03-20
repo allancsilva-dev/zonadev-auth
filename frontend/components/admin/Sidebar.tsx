@@ -24,6 +24,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: '/admin/apps',
+    label: 'Aplicações',
+    roles: ['SUPERADMIN'],
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75h6.5v6.5h-6.5zM13.75 3.75h6.5v6.5h-6.5zM3.75 13.75h6.5v6.5h-6.5zM13.75 13.75h6.5v6.5h-6.5z" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/tenants',
     label: 'Tenants',
     roles: ['SUPERADMIN'],
@@ -82,7 +92,8 @@ export default function Sidebar() {
     }
   }
 
-  const visibleItems = navItems.filter(item => item.roles.includes(user.role));
+  const userRoles = user.roles?.length ? user.roles : [user.role];
+  const visibleItems = navItems.filter((item) => item.roles.some((role) => userRoles.includes(role)));
 
   return (
     <aside className="w-60 shrink-0 bg-[#0a0a0a] border-r border-[#2a2a2a] flex flex-col h-screen">

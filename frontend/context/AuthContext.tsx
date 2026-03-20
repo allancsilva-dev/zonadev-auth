@@ -6,6 +6,7 @@ interface AuthUser {
   sub: string;
   email: string;
   role: string;
+  roles: string[];
   tenantId: string | null;
   plan: string | null;
 }

@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { tenantSchema, TenantFormData } from '@/lib/validations/tenant';
 import { getErrorMessage } from '@/types/api-error';
 import { Tenant, PlanType } from '@/types/tenant';
+import { useAuth } from '@/hooks/useAuth';
 
 const PAGE_SIZE = 10;
 const PLAN_OPTIONS: PlanType[] = ['FREE', 'STARTER', 'PRO', 'ENTERPRISE'];
@@ -26,6 +27,7 @@ function FieldError({ message }: { message?: string }) {
 export default function TenantsClient() {
   const qc = useQueryClient();
   const toast = useToast();
+  const { user } = useAuth();
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -39,7 +41,7 @@ export default function TenantsClient() {
 
   const createForm = useForm({
     resolver: zodResolver(tenantSchema),
-    defaultValues: { name: '', subdomain: '', plan: 'FREE', active: true },
+    defaultValues: { name: '', subdomain: '', ownerEmail: '', plan: 'FREE', active: true },
   });
 
   const editForm = useForm({
@@ -109,6 +111,11 @@ export default function TenantsClient() {
     { key: 'plan', label: 'Plano', render: row => <span className="text-indigo-400 text-xs font-medium">{row.plan}</span> },
     { key: 'active', label: 'Status', render: row => <StatusBadge status={row.active} /> },
     {
+      key: 'provisionStatus',
+      label: 'Provisionamento',
+      render: (row) => <StatusBadge status={(row.provisionStatus ?? 'pending').toUpperCase() as any} />,
+    },
+    {
       key: 'actions', label: 'Ações',
       render: row => (
         <div className="flex gap-2">
@@ -168,7 +175,15 @@ export default function TenantsClient() {
 
       {/* Modal — Criar */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Novo Tenant">
-        <form onSubmit={createForm.handleSubmit(data => createMutation.mutate(data))} className="space-y-4">
+        <form
+          onSubmit={createForm.handleSubmit((data) =>
+            createMutation.mutate({
+              ...data,
+              ownerAuthUserId: user.sub,
+            })
+          )}
+          className="space-y-4"
+        >
           <div>
             <label className="block text-sm text-slate-300 mb-1.5">Nome</label>
             <input
@@ -191,6 +206,16 @@ export default function TenantsClient() {
             <select {...createForm.register('plan')} className="w-full bg-[#0a0a0a] border border-[#2a2a2a] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
               {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5">E-mail do Admin Inicial</label>
+            <input
+              type="email"
+              {...createForm.register('ownerEmail')}
+              placeholder="admin@empresa.com"
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <FieldError message={createForm.formState.errors.ownerEmail?.message} />
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" id="active-create" {...createForm.register('active')} className="accent-indigo-500" />
