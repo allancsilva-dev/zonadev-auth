@@ -38,7 +38,7 @@ export class TenantsController {
   }
 
   @Post()
-  create(@Body() dto: CreateTenantDto) { return this.tenantsService.create(dto); }
+  create(@Body() dto: CreateTenantDto) { return this.tenantsService.createTenant(dto); }
 
   @Put(':id')
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateTenantDto) {

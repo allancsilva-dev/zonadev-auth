@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsEnum, IsOptional, IsBoolean, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, IsEnum, IsOptional, IsBoolean, Matches, IsUUID, IsEmail } from 'class-validator';
 import { PlanType } from '../../../common/enums/plan-type.enum';
 
 export class CreateTenantDto {
@@ -21,4 +21,12 @@ export class CreateTenantDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @IsNotEmpty()
+  @IsUUID()
+  ownerAuthUserId: string;
+
+  @IsNotEmpty()
+  @IsEmail()
+  ownerEmail: string;
 }

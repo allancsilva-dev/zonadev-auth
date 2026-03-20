@@ -1,18 +1,28 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../entities/tenant.entity';
 import { User } from '../../entities/user.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
+import { SeedTenantService } from './seed-tenant.service';
 
 @Injectable()
 export class TenantsService {
+  private readonly logger = new Logger(TenantsService.name);
+
   constructor(
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly seedTenantService: SeedTenantService,
   ) {}
 
   async findAll(): Promise<Tenant[]> {
@@ -58,9 +68,52 @@ export class TenantsService {
     return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
+  async createTenant(dto: CreateTenantDto): Promise<Tenant> {
+    if (!dto.ownerEmail || !dto.ownerEmail.includes('@')) {
+      throw new BadRequestException('ownerEmail inválido');
+    }
+
+    const existing = await this.tenantRepo.findOne({ where: { subdomain: dto.subdomain } });
+    if (existing) {
+      throw new ConflictException(`Tenant com slug '${dto.subdomain}' já existe`);
+    }
+
+    const tenant = await this.tenantRepo.save(
+      this.tenantRepo.create({
+        name: dto.name,
+        subdomain: dto.subdomain,
+        plan: dto.plan,
+        active: dto.active,
+        provisionStatus: 'pending',
+      }),
+    );
+
+    try {
+      await this.seedTenantService.seedTenant(
+        tenant.id,
+        dto.ownerAuthUserId,
+        dto.ownerEmail,
+      );
+
+      await this.tenantRepo.update(tenant.id, { provisionStatus: 'active' });
+      this.logger.log({ event: 'TENANT_PROVISIONED', tenantId: tenant.id });
+    } catch (error) {
+      await this.tenantRepo.update(tenant.id, { provisionStatus: 'failed' });
+
+      const err = error as { message?: string };
+      this.logger.error({
+        event: 'TENANT_PROVISION_FAILED',
+        tenantId: tenant.id,
+        error: err.message ?? 'unknown_error',
+      });
+    }
+
+    return this.tenantRepo.findOneOrFail({ where: { id: tenant.id } });
+  }
+
   async create(dto: CreateTenantDto): Promise<Tenant> {
     try {
-      return await this.tenantRepo.save(this.tenantRepo.create(dto));
+      return await this.createTenant(dto);
     } catch (err: any) {
       if (err?.code === '23505') {
         throw new ConflictException('Dados duplicados — verifique os campos únicos');
