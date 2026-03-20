@@ -148,7 +148,8 @@ export class AuthService {
       throw new UnauthorizedException('Sessao expirada');
     }
 
-    if (!session.user.tenantId) {
+    const isSuperAdmin = session.user.roles?.includes('SUPERADMIN');
+    if (!session.user.tenantId && !isSuperAdmin) {
       this.logger.warn({ event: 'TOKEN_EXCHANGE_MISSING_TENANT', userId: session.user.id, ip: req.ip });
       throw new UnauthorizedException('Tenant inválido no usuário');
     }
