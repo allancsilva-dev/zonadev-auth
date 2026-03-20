@@ -4,11 +4,14 @@ import {
   BadRequestException,
   Inject,
   Logger,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Response, Request } from 'express';
+import type Redis from 'ioredis';
 import * as bcryptjs from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -27,6 +30,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from '../mail/mail.service';
 import { AppCacheService } from '../app/app-cache.service';
+import { REDIS_CLIENT } from '../redis/redis.constants';
 
 const MAX_SESSIONS = 10;
 const BCRYPT_ROUNDS = 12;
@@ -50,6 +54,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly appCacheService: AppCacheService,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Subscription) private readonly subscriptionRepo: Repository<Subscription>,
     @InjectRepository(AuditLog) private readonly auditLogRepo: Repository<AuditLog>,
@@ -95,6 +100,41 @@ export class AuthService {
   }
 
   async issueAppToken(aud: string, req: Request, res: Response): Promise<void> {
+    if (!aud || typeof aud !== 'string') {
+      throw new BadRequestException('Audience ausente ou inválido');
+    }
+
+    const audNormalized = aud.toLowerCase().trim();
+    if (!/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/.test(audNormalized)) {
+      throw new BadRequestException('Formato de audience inválido');
+    }
+
+    const app = await this.appCacheService.getByAudience(audNormalized);
+    if (!app) {
+      throw new UnauthorizedException('Aplicacao nao autorizada');
+    }
+
+    const normalizeOrigin = (value: string): string => {
+      try {
+        return new URL(value).origin.toLowerCase();
+      } catch {
+        return value.toLowerCase().trim();
+      }
+    };
+
+    const origin = req.headers.origin;
+    const expectedBaseUrl = app.baseUrl ?? app.allowOrigin;
+    if (origin && expectedBaseUrl && normalizeOrigin(origin) !== normalizeOrigin(expectedBaseUrl)) {
+      this.logger.warn({
+        event: 'TOKEN_EXCHANGE_BLOCKED_ORIGIN',
+        aud: audNormalized,
+        origin,
+        expected: expectedBaseUrl,
+        ip: req.ip,
+      });
+      throw new UnauthorizedException('Origin nao autorizada para este app');
+    }
+
     const sid = req.cookies?.zonadev_sid;
     if (!sid) throw new UnauthorizedException('Sessao ausente');
 
@@ -104,12 +144,13 @@ export class AuthService {
     });
 
     if (!session || session.expiresAt < new Date()) {
+      this.logger.warn({ event: 'TOKEN_EXCHANGE_INVALID_SESSION', aud: audNormalized, ip: req.ip });
       throw new UnauthorizedException('Sessao expirada');
     }
 
-    const app = this.appCacheService.getAppByAudience(aud);
-    if (!app) {
-      throw new UnauthorizedException('Aplicacao nao autorizada');
+    if (!session.user.tenantId) {
+      this.logger.warn({ event: 'TOKEN_EXCHANGE_MISSING_TENANT', userId: session.user.id, ip: req.ip });
+      throw new UnauthorizedException('Tenant inválido no usuário');
     }
 
     const access = await this.uaaRepo.findOne({
@@ -122,8 +163,26 @@ export class AuthService {
     });
 
     if (!access) {
+      this.logger.warn({
+        event: 'TOKEN_EXCHANGE_NO_APP_ACCESS',
+        userId: session.user.id,
+        app: audNormalized,
+        ip: req.ip,
+      });
       throw new UnauthorizedException('Sem acesso a esta aplicacao');
     }
+
+    const userRateKey = `rate:token_exchange:${session.user.id}`;
+    const count = await this.redisClient.incr(userRateKey);
+    if (count === 1) {
+      await this.redisClient.expire(userRateKey, 60);
+    }
+    if (count >= 30) {
+      this.logger.warn({ event: 'TOKEN_EXCHANGE_RATE_LIMITED', userId: session.user.id, ip: req.ip });
+      throw new HttpException('Rate limit por usuário atingido', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    const startTime = Date.now();
 
     if (!session.user.active) {
       throw new UnauthorizedException('Usuario desativado');
@@ -159,7 +218,7 @@ export class AuthService {
         // roles serão removidas após migração completa dos SaaS
         roles: session.user.roles ?? [],
         defaultRole: access.defaultRole,
-        aud,
+        aud: audNormalized,
       },
       {
         algorithm: 'RS256',
@@ -167,6 +226,16 @@ export class AuthService {
         header: { kid: this.jwtKid, alg: 'RS256' },
       },
     );
+
+    this.logger.log({
+      event: 'TOKEN_EXCHANGE_SUCCESS',
+      userId: session.user.id,
+      email: session.user.email,
+      app: audNormalized,
+      ip: req.ip,
+      origin: req.headers.origin ?? 'server-side',
+      latencyMs: Date.now() - startTime,
+    });
 
     res.json({
       access_token: jwt,

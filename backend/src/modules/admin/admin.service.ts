@@ -226,7 +226,7 @@ export class AdminService {
       active: dto.active ?? true,
     });
 
-    await this.appCacheService.reload();
+    await this.appCacheService.reloadFromDatabase();
     return { data: app };
   }
 
@@ -238,12 +238,12 @@ export class AdminService {
     if (dto.active !== undefined) payload.active = dto.active;
 
     await this.appRepo.update(id, payload);
-    await this.appCacheService.reload();
+    await this.appCacheService.reloadFromDatabase();
     return { success: true };
   }
 
   async reloadAppsCache(): Promise<{ success: boolean }> {
-    await this.appCacheService.reload();
+    await this.appCacheService.reloadFromDatabase();
     return { success: true };
   }
 }

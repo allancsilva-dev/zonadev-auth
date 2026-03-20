@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from '../../strategies/jwt.strategy';
 import { MailModule } from '../mail/mail.module';
 import { AppCacheModule } from '../app/app-cache.module';
+import { RedisModule } from '../redis/redis.module';
 import { User } from '../../entities/user.entity';
 import { Tenant } from '../../entities/tenant.entity';
 import { Subscription } from '../../entities/subscription.entity';
@@ -52,6 +53,7 @@ function loadKey(envPath: string, fallback: string): string {
       UserAppAccess,
     ]),
     AppCacheModule,
+    RedisModule,
     MailModule,
   ],
   controllers: [AuthController],

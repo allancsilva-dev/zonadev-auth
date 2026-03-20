@@ -64,7 +64,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?statement_timeout=3000&lock_timeout=2000&connect_timeout=5
       NODE_ENV: production
     networks:
       - internal
@@ -89,7 +89,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?statement_timeout=3000&lock_timeout=2000&connect_timeout=5
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_PRIVATE_KEY_PATH: /app/keys/private.pem
