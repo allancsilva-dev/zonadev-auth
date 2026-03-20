@@ -24,4 +24,4 @@ export function isSafeRedirect(
   }
 }
 
-export const SAFE_REDIRECT_FALLBACK = 'https://auth.zonadev.tech';
+export const SAFE_REDIRECT_FALLBACK = 'https://auth.zonadev.tech/admin';
