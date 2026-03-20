@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -18,6 +19,13 @@ export class App {
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
+  @Index('idx_apps_domain_unique', { unique: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  domain: string | null;
+
+  @Column({ name: 'base_url', type: 'text', nullable: true })
+  baseUrl: string | null;
+
   @Index('idx_apps_audience_unique', { unique: true })
   @Column({ type: 'varchar', length: 255, unique: true })
   audience: string;
@@ -30,4 +38,7 @@ export class App {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz', nullable: true })
+  updatedAt: Date | null;
 }

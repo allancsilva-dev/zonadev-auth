@@ -24,6 +24,10 @@ import { AuditLog } from './entities/audit-log.entity';
 import { App } from './entities/app.entity';
 import { Session } from './entities/session.entity';
 import { UserAppAccess } from './entities/user-app-access.entity';
+import { Permission } from './entities/permission.entity';
+import { TenantRole } from './entities/tenant-role.entity';
+import { TenantRolePermission } from './entities/tenant-role-permission.entity';
+import { LocalUser } from './entities/local-user.entity';
 
 @Module({
   imports: [
@@ -44,6 +48,10 @@ import { UserAppAccess } from './entities/user-app-access.entity';
         App,
         Session,
         UserAppAccess,
+        Permission,
+        TenantRole,
+        TenantRolePermission,
+        LocalUser,
       ],
       synchronize: false, // Nunca synchronize em produção — usar migrations
       logging: process.env.NODE_ENV === 'development',

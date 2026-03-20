@@ -25,6 +25,9 @@ export class Tenant {
   @Column({ type: 'boolean', default: true })
   active: boolean;
 
+  @Column({ name: 'provision_status', type: 'varchar', length: 20, default: 'active' })
+  provisionStatus: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
