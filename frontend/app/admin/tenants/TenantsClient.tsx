@@ -9,7 +9,7 @@ import { Modal } from '@/components/admin/Modal';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { Pagination } from '@/components/admin/Pagination';
 import { useToast } from '@/components/admin/Toast';
-import { getTenants, createTenant, updateTenant, deleteTenant } from '@/lib/api/tenants';
+import { getTenants, createTenant, updateTenant, deleteTenant, reprovisionTenant } from '@/lib/api/tenants';
 import { queryKeys } from '@/lib/queryKeys';
 import { tenantSchema, TenantFormData } from '@/lib/validations/tenant';
 import { getErrorMessage } from '@/types/api-error';
@@ -81,6 +81,16 @@ export default function TenantsClient() {
     onError: (e) => toast.error(getErrorMessage(e, 'Não foi possível remover o tenant.')),
   });
 
+  const reprovisionMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      reprovisionTenant(id, { ownerAuthUserId: user.sub, ownerEmail: user.email }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: queryKeys.tenants() });
+      toast.success('Reprovisionamento iniciado com sucesso.');
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Não foi possível re-provisionar o tenant.')),
+  });
+
   const filtered = tenants.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.subdomain.toLowerCase().includes(search.toLowerCase())
@@ -120,6 +130,14 @@ export default function TenantsClient() {
       render: row => (
         <div className="flex gap-2">
           <button onClick={() => openEdit(row)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Editar</button>
+          {(row.provisionStatus ?? 'pending') === 'failed' && (
+            <button
+              onClick={() => reprovisionMutation.mutate({ id: row.id })}
+              className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
+            >
+              Re-provisionar
+            </button>
+          )}
           <button onClick={() => handleDelete(row.id)} className="text-xs text-red-400 hover:text-red-300 transition-colors">Remover</button>
         </div>
       ),

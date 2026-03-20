@@ -12,6 +12,7 @@ import { User } from '../../entities/user.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { SeedTenantService } from './seed-tenant.service';
+import { ReprovisionTenantDto } from './dto/reprovision-tenant.dto';
 
 @Injectable()
 export class TenantsService {
@@ -120,6 +121,34 @@ export class TenantsService {
       }
       throw err;
     }
+  }
+
+  async reprovisionTenant(id: string, dto: ReprovisionTenantDto): Promise<Tenant> {
+    const tenant = await this.findOne(id);
+
+    if (tenant.provisionStatus !== 'failed') {
+      throw new BadRequestException('Apenas tenants com status failed podem ser re-provisionados');
+    }
+
+    if (!dto.ownerEmail || !dto.ownerEmail.includes('@')) {
+      throw new BadRequestException('ownerEmail inválido');
+    }
+
+    try {
+      await this.seedTenantService.seedTenant(id, dto.ownerAuthUserId, dto.ownerEmail);
+      await this.tenantRepo.update(id, { provisionStatus: 'active' });
+      this.logger.log({ event: 'TENANT_PROVISIONED', tenantId: id });
+    } catch (error) {
+      await this.tenantRepo.update(id, { provisionStatus: 'failed' });
+      const err = error as { message?: string };
+      this.logger.error({
+        event: 'TENANT_PROVISION_FAILED',
+        tenantId: id,
+        error: err.message ?? 'unknown_error',
+      });
+    }
+
+    return this.tenantRepo.findOneOrFail({ where: { id } });
   }
 
   async update(id: string, dto: UpdateTenantDto): Promise<Tenant> {

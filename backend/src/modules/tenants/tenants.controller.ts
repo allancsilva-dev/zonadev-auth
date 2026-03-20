@@ -5,6 +5,7 @@ import { Throttle } from '@nestjs/throttler';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
+import { ReprovisionTenantDto } from './dto/reprovision-tenant.dto';
 import { JwtAuthGuard } from '../../guards/jwt.guard';
 import { RolesGuard } from '../../guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -43,6 +44,16 @@ export class TenantsController {
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() dto: CreateTenantDto) { return this.tenantsService.createTenant(dto); }
+
+  @Post(':id/reprovision')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  reprovision(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ReprovisionTenantDto,
+  ) {
+    return this.tenantsService.reprovisionTenant(id, dto);
+  }
 
   @Put(':id')
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateTenantDto) {

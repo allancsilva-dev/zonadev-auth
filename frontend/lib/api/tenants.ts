@@ -26,3 +26,13 @@ export function updateTenant(id: string, payload: UpdateTenantPayload): Promise<
 export function deleteTenant(id: string): Promise<void> {
   return apiFetchJson<void>(`/tenants/${id}`, { method: 'DELETE' });
 }
+
+export function reprovisionTenant(
+  id: string,
+  payload: { ownerAuthUserId: string; ownerEmail: string },
+): Promise<Tenant> {
+  return apiFetchJson<Tenant>(`/tenants/${id}/reprovision`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
