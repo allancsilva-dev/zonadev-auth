@@ -20,6 +20,12 @@ async function handleProxy(
   const backendUrl = new URL(`${API_URL}/${path}${url.search}`);
 
   const headers = new Headers(request.headers);
+  const accessToken = request.cookies.get('admin_access_token')?.value;
+
+  if (accessToken) {
+    headers.set('authorization', `Bearer ${accessToken}`);
+  }
+
   // Corrige o header Host para evitar problemas no NestJS
   headers.set('host', backendUrl.host);
 
