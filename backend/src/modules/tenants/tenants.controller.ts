@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ParseUUIDPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
@@ -8,6 +9,7 @@ import { JwtAuthGuard } from '../../guards/jwt.guard';
 import { RolesGuard } from '../../guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { SuperAdminGuard } from '../../guards/superadmin.guard';
 
 @Controller('tenants')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -38,6 +40,8 @@ export class TenantsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() dto: CreateTenantDto) { return this.tenantsService.createTenant(dto); }
 
   @Put(':id')
