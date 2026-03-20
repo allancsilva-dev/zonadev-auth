@@ -1,5 +1,4 @@
 import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
-import { Role } from '../common/enums/role.enum';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, StrategyOptionsWithoutRequest } from 'passport-jwt';
 
@@ -7,11 +6,11 @@ export interface JwtPayload {
   sub: string;
   email: string;
   jti: string;
-  tokenVersion: number;
+  tokenVersion?: number;
   tenantId: string | null;
   tenantSubdomain: string | null;
   plan: string | null;
-  roles: string[];
+  roles?: string[];
   iss: string;
   aud: string;
   iat: number;
@@ -47,9 +46,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid audience');
     }
 
-    const validRoles = Object.values(Role) as string[];
-    if (!payload.roles.every((role) => validRoles.includes(role))) {
-      throw new UnauthorizedException('Token inválido');
+    const expectedIss = process.env.JWT_ISSUER ?? 'auth.zonadev.tech';
+    if (payload.iss && payload.iss !== expectedIss) {
+      throw new UnauthorizedException('Invalid issuer');
+    }
+
+    if (payload.roles) {
+      console.warn('[AUTH] JWT contém roles (compat mode)');
     }
 
     return payload;

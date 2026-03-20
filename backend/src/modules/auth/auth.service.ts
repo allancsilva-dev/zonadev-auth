@@ -155,6 +155,9 @@ export class AuthService {
         tenantId: session.user.tenantId,
         tenantSubdomain: session.user.tenant?.subdomain ?? null,
         plan: session.user.tenant?.plan ?? null,
+        // ⚠️ COMPATIBILIDADE TEMPORÁRIA
+        // roles serão removidas após migração completa dos SaaS
+        roles: session.user.roles ?? [],
         defaultRole: access.defaultRole,
         aud,
       },
