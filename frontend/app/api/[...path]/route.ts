@@ -2,6 +2,55 @@ import { NextRequest } from 'next/server';
 
 const API_URL = process.env.API_URL;
 
+function splitSetCookieHeader(value: string): string[] {
+  const cookies: string[] = [];
+  let start = 0;
+  let inExpires = false;
+
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i];
+
+    if ((char === 'E' || char === 'e') && value.slice(i, i + 8).toLowerCase() === 'expires=') {
+      inExpires = true;
+      i += 7;
+      continue;
+    }
+
+    if (char === ';' && inExpires) {
+      inExpires = false;
+      continue;
+    }
+
+    if (char === ',' && !inExpires) {
+      const cookie = value.slice(start, i).trim();
+      if (cookie) cookies.push(cookie);
+      start = i + 1;
+    }
+  }
+
+  const tail = value.slice(start).trim();
+  if (tail) cookies.push(tail);
+
+  return cookies;
+}
+
+function extractSetCookies(headers: Headers): string[] {
+  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof withGetSetCookie.getSetCookie === 'function') {
+    return withGetSetCookie.getSetCookie();
+  }
+
+  const withRaw = headers as Headers & { raw?: () => Record<string, string[]> };
+  if (typeof withRaw.raw === 'function') {
+    const rawHeaders = withRaw.raw();
+    return rawHeaders['set-cookie'] ?? rawHeaders['Set-Cookie'] ?? [];
+  }
+
+  const combined = headers.get('set-cookie');
+  if (!combined) return [];
+  return splitSetCookieHeader(combined);
+}
+
 async function handleProxy(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -40,10 +89,21 @@ async function handleProxy(
       redirect: 'manual',
     });
 
-    // Repassa todos os headers do backend, incluindo Set-Cookie
+    const responseHeaders = new Headers();
+    res.headers.forEach((headerValue, headerKey) => {
+      if (headerKey.toLowerCase() === 'set-cookie') return;
+      responseHeaders.append(headerKey, headerValue);
+    });
+
+    const setCookies = extractSetCookies(res.headers);
+    for (const cookie of setCookies) {
+      responseHeaders.append('set-cookie', cookie);
+    }
+
+    // Repassa headers do backend preservando todos os Set-Cookie.
     return new Response(res.body, {
       status: res.status,
-      headers: res.headers,
+      headers: responseHeaders,
     });
   } catch {
     return new Response(JSON.stringify({ message: 'Backend indisponível' }), {
