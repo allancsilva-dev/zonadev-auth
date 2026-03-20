@@ -41,6 +41,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token inválido');
     }
 
+    const expectedAud = process.env.JWT_EXPECTED_AUD ?? 'auth.zonadev.tech';
+    const tokenAud = Array.isArray(payload.aud) ? payload.aud[0] : payload.aud;
+    if (tokenAud && tokenAud !== expectedAud) {
+      throw new UnauthorizedException('Invalid audience');
+    }
+
     const validRoles = Object.values(Role) as string[];
     if (!payload.roles.every((role) => validRoles.includes(role))) {
       throw new UnauthorizedException('Token inválido');
