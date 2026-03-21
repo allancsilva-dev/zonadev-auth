@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [redirect, setRedirect] = useState('');
 
   useEffect(() => {
-    setAud(getQueryParam('aud'));
+    setAud(getQueryParam('aud') || getQueryParam('app'));
     setRedirect(getQueryParam('redirect'));
   }, []);
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password,
-          aud: aud || 'renowa.zonadev.tech',
+          aud: aud || getQueryParam('app') || 'renowa.zonadev.tech',
           redirect: redirect || undefined,
         }),
       });
