@@ -5,17 +5,18 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from '../../guards/jwt.guard';
 import { RolesGuard } from '../../guards/roles.guard';
+import { InternalSecretGuard } from '../../guards/internal-secret.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { JwtPayload } from '../../strategies/jwt.strategy';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @UseGuards(InternalSecretGuard, JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
   findAll(
     @Query('page') page?: string,
@@ -39,6 +40,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
   findOne(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -46,16 +48,19 @@ export class UsersController {
   ) { return this.usersService.findOne(id, user); }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
   create(@Body() dto: CreateUserDto, @CurrentUser() user: JwtPayload) { return this.usersService.create(dto, (user.roles?.[0] as Role) ?? Role.USER, user.tenantId ?? null); }
 
   // Soft delete via PATCH — nunca hard delete em IdP
   @Patch(':id/deactivate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
   deactivatePatch(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: JwtPayload) { return this.usersService.deactivate(id, user); }
 
   // Mantido para compatibilidade com código existente — delega para deactivate
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
   deactivate(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: JwtPayload) { return this.usersService.deactivate(id, user); }
 }
