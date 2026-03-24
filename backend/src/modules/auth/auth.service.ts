@@ -426,15 +426,28 @@ export class AuthService {
     const userId = session?.user?.id ?? (req as any).user?.sub;
     await this.audit(AuditAction.LOGOUT, ip, userAgent, userId, session?.user?.tenantId ?? undefined);
 
+    // Audit log to aid debugging and observability
+    this.logger.log('Logout realizado', { userId, tenantId: session?.user?.tenantId ?? undefined, redirect: postLogoutRedirectUri });
+
     // If a post_logout_redirect_uri was provided, validate it against
     // the client's registered redirect URIs (per-tenant / per-user apps)
     if (postLogoutRedirectUri) {
       const normalizeUri = (u: string): string => {
+        let url: URL;
         try {
-          return new URL(u).toString().toLowerCase();
+          url = new URL(u);
         } catch (err) {
           throw new BadRequestException('Malformed post_logout_redirect_uri');
         }
+
+        // Enforce HTTPS only for post logout redirects
+        if (url.protocol !== 'https:') {
+          throw new UnauthorizedException('Only HTTPS allowed for post_logout_redirect_uri');
+        }
+
+        // Strip hash to avoid mismatches caused by fragments
+        url.hash = '';
+        return url.toString().toLowerCase();
       };
 
       try {
@@ -472,11 +485,13 @@ export class AuthService {
         const allowedNormalized = allowedUris.map((x) => normalizeUri(x));
 
         if (allowedNormalized.includes(requested)) {
+          this.logger.log('Logout realizado', { userId, tenantId: session?.user?.tenantId ?? undefined, redirect: postLogoutRedirectUri });
           res.redirect(postLogoutRedirectUri);
           return;
         }
 
         // If not matched, reject redirect for safety
+        this.logger.warn('Blocked post_logout_redirect_uri not in whitelist', { requested, userId, tenantId: session?.user?.tenantId ?? undefined });
         res.status(HttpStatus.UNAUTHORIZED).json({ success: false, message: 'Invalid post_logout_redirect_uri' });
         return;
       } catch (err) {
