@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { AuthController } from './auth.controller';
+import { OpenIdController } from './openid.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from '../../strategies/jwt.strategy';
 import { MailModule } from '../mail/mail.module';
@@ -56,7 +57,7 @@ function loadKey(envPath: string, fallback: string): string {
     RedisModule,
     MailModule,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, OpenIdController],
   providers: [
     AuthService,
     JwtStrategy,

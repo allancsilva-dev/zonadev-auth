@@ -19,6 +19,7 @@ import { User } from '../../entities/user.entity';
 import { Subscription } from '../../entities/subscription.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { Session } from '../../entities/session.entity';
+import { RefreshToken } from '../../entities/refresh-token.entity';
 import { UserAppAccess } from '../../entities/user-app-access.entity';
 import { App } from '../../entities/app.entity';
 import { SubscriptionStatus } from '../../common/enums/subscription-status.enum';
@@ -59,6 +60,7 @@ export class AuthService {
     @InjectRepository(Subscription) private readonly subscriptionRepo: Repository<Subscription>,
     @InjectRepository(AuditLog) private readonly auditLogRepo: Repository<AuditLog>,
     @InjectRepository(Session) private readonly sessionRepo: Repository<Session>,
+    @InjectRepository(RefreshToken) private readonly refreshTokenRepo: Repository<RefreshToken>,
     @InjectRepository(UserAppAccess) private readonly uaaRepo: Repository<UserAppAccess>,
     @InjectRepository(App) private readonly appRepo: Repository<App>,
   ) {
@@ -361,20 +363,46 @@ export class AuthService {
     res.json({ success: true, redirect: redirectUrl });
   }
 
-  async logout(req: Request, res: Response): Promise<void> {
+  async logout(req: Request, res: Response, postLogoutRedirectUri?: string): Promise<void> {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
       ?? req.ip
       ?? 'unknown';
     const userAgent = req.headers['user-agent'] ?? 'unknown';
-
     const sid = req.cookies?.zonadev_sid;
+
+    // Try to load full session to obtain user and tenant context
+    let session: Session | null = null;
     if (sid) {
-      await this.sessionRepo.update(
-        { tokenHash: sha256(sid) },
-        { revokedAt: new Date() },
-      );
+      session = await this.sessionRepo.findOne({
+        where: { tokenHash: sha256(sid), revokedAt: IsNull() },
+        relations: ['user', 'user.tenant'],
+      });
     }
 
+    // Revoke session record if present
+    if (session) {
+      await this.sessionRepo.update({ id: session.id }, { revokedAt: new Date() });
+    } else if (sid) {
+      // Best-effort: try updating by tokenHash if session entity wasn't loaded
+      await this.sessionRepo.update({ tokenHash: sha256(sid) }, { revokedAt: new Date() });
+    }
+
+    // Revoke refresh tokens for the user (if known)
+    try {
+      const userId = session?.user?.id;
+      if (userId) {
+        await this.refreshTokenRepo.createQueryBuilder()
+          .update(RefreshToken)
+          .set({ revokedAt: new Date() })
+          .where('user_id = :userId', { userId })
+          .andWhere('revoked_at IS NULL')
+          .execute();
+      }
+    } catch (err) {
+      this.logger.error(`Failed to revoke refresh tokens: ${err}`);
+    }
+
+    // Clear cookies (keep same options used on login)
     res.clearCookie('zonadev_sid', {
       httpOnly: true,
       secure: this.isProduction,
@@ -394,9 +422,75 @@ export class AuthService {
     res.clearCookie('access_token', clearOld);
     res.clearCookie('refresh_token', clearOld);
 
-    const userId = (req as any).user?.sub;
-    await this.audit(AuditAction.LOGOUT, ip, userAgent, userId);
+    // Audit
+    const userId = session?.user?.id ?? (req as any).user?.sub;
+    await this.audit(AuditAction.LOGOUT, ip, userAgent, userId, session?.user?.tenantId ?? undefined);
 
+    // If a post_logout_redirect_uri was provided, validate it against
+    // the client's registered redirect URIs (per-tenant / per-user apps)
+    if (postLogoutRedirectUri) {
+      const normalizeUri = (u: string): string => {
+        try {
+          return new URL(u).toString().toLowerCase();
+        } catch (err) {
+          throw new BadRequestException('Malformed post_logout_redirect_uri');
+        }
+      };
+
+      try {
+        const requested = normalizeUri(postLogoutRedirectUri);
+
+        // Build allowed exact URIs from user app access list if we have a user
+        let allowedUris: string[] = [];
+
+        if (session?.user?.id) {
+          const uaa = await this.uaaRepo.find({
+            where: { userId: session.user.id, status: 'active', revokedAt: IsNull() },
+            relations: ['app'],
+          });
+
+          for (const u of uaa) {
+            const app = u.app;
+            if (!app) continue;
+            if (Array.isArray((app as any).postLogoutRedirectUris) && (app as any).postLogoutRedirectUris.length > 0) {
+              allowedUris.push(...(app as any).postLogoutRedirectUris);
+            }
+          }
+        }
+
+        // Fallback: gather registered post_logout_redirect_uris from all active apps
+        if (allowedUris.length === 0) {
+          const apps = await this.appRepo.find({ where: { active: true } });
+          for (const a of apps) {
+            if (Array.isArray((a as any).postLogoutRedirectUris) && (a as any).postLogoutRedirectUris.length > 0) {
+              allowedUris.push(...(a as any).postLogoutRedirectUris);
+            }
+          }
+        }
+
+        // Normalize and compare exact URIs
+        const allowedNormalized = allowedUris.map((x) => normalizeUri(x));
+
+        if (allowedNormalized.includes(requested)) {
+          res.redirect(postLogoutRedirectUri);
+          return;
+        }
+
+        // If not matched, reject redirect for safety
+        res.status(HttpStatus.UNAUTHORIZED).json({ success: false, message: 'Invalid post_logout_redirect_uri' });
+        return;
+      } catch (err) {
+        if (err instanceof BadRequestException) {
+          res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: 'Malformed post_logout_redirect_uri' });
+          return;
+        }
+        this.logger.error(`post_logout_redirect_uri validation error: ${err}`);
+        res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: 'Invalid post_logout_redirect_uri' });
+        return;
+      }
+    }
+
+    // Default response: list local logout hooks for apps (back-compat)
     const apps = await this.appRepo.find({ where: { active: true } });
     const logoutUrls = apps
       .filter((a) => a.slug !== 'admin')

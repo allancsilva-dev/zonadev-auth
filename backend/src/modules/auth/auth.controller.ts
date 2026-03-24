@@ -60,6 +60,18 @@ export class AuthController {
     return this.authService.logout(req, res);
   }
 
+  // GET logout: supports redirection via `post_logout_redirect_uri`
+  @Get('auth/logout')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async logoutGet(
+    @Query('post_logout_redirect_uri') postLogoutRedirectUri: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    return this.authService.logout(req, res, postLogoutRedirectUri);
+  }
+
   // ─── Forgot Password ───────────────────────────────────────────────────────
   // Rate limit: 5 req / 15 min — proteção contra abuso de SMTP
   @Post('auth/forgot-password')

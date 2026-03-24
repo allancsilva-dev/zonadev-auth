@@ -26,6 +26,9 @@ export class App {
   @Column({ name: 'base_url', type: 'text', nullable: true })
   baseUrl: string | null;
 
+  @Column({ name: 'post_logout_redirect_uris', type: 'text', array: true, nullable: true })
+  postLogoutRedirectUris: string[] | null;
+
   @Index('idx_apps_audience_unique', { unique: true })
   @Column({ type: 'varchar', length: 255, unique: true })
   audience: string;
