@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength, IsArray, IsUrl } from 'class-validator';
 
 export class CreateAppDto {
   @IsNotEmpty()
@@ -32,4 +32,9 @@ export class CreateAppDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+  
+  @IsOptional()
+  @IsArray()
+  @IsUrl({}, { each: true })
+  postLogoutRedirectUris?: string[];
 }

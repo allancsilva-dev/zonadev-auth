@@ -5,6 +5,7 @@ import { serverFetch } from '@/lib/api/server';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { User } from '@/types/user';
 import { DeactivateButton } from './DeactivateButton';
+import UserAppsClient from './UserAppsClient';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -134,6 +135,9 @@ export default async function UserDetailPage({ params }: Props) {
           <DeactivateButton userId={user.id} />
         </div>
       )}
+      <div className="mt-6">
+        <UserAppsClient userId={user.id} />
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ export interface AdminApp {
   slug: string;
   domain: string;
   baseUrl?: string;
+  postLogoutRedirectUris?: string[];
   active: boolean;
   updatedAt?: string | null;
 }
@@ -14,4 +15,5 @@ export interface CreateAdminAppPayload {
   domain: string;
   baseUrl: string;
   active?: boolean;
+  postLogoutRedirectUris?: string[];
 }

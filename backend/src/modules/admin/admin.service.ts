@@ -243,6 +243,7 @@ export class AdminService {
       audience: domainNorm,
       allowOrigin: baseUrlNorm,
       active: dto.active ?? true,
+      postLogoutRedirectUris: dto.postLogoutRedirectUris && dto.postLogoutRedirectUris.length > 0 ? dto.postLogoutRedirectUris : null,
     });
 
     await this.appCacheService.reloadFromDatabase();
@@ -265,6 +266,22 @@ export class AdminService {
       payload.allowOrigin = baseUrlNorm;
     }
 
+    if (dto.postLogoutRedirectUris !== undefined) {
+      // Validate URIs are HTTPS in production
+      if (Array.isArray(dto.postLogoutRedirectUris)) {
+        for (const u of dto.postLogoutRedirectUris) {
+          try {
+            const parsed = new URL(u);
+            if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+              throw new BadRequestException('post_logout_redirect_uris must use https in production');
+            }
+          } catch (err) {
+            throw new BadRequestException('Invalid post_logout_redirect_uri');
+          }
+        }
+      }
+      payload.postLogoutRedirectUris = dto.postLogoutRedirectUris;
+    }
     if (dto.active !== undefined) payload.active = dto.active;
 
     await this.appRepo.update(id, payload);

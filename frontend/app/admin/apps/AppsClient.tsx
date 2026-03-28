@@ -18,6 +18,8 @@ export default function AppsClient() {
   const [slug, setSlug] = useState('');
   const [domain, setDomain] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [redirectInput, setRedirectInput] = useState('');
+  const [postLogoutRedirectUris, setPostLogoutRedirectUris] = useState<string[]>([]);
 
   const appsQuery = useQuery({
     queryKey: ['admin-apps'],
@@ -72,13 +74,39 @@ export default function AppsClient() {
       return;
     }
 
+    // Validate redirects are https when present
+    for (const u of postLogoutRedirectUris) {
+      if (!u.startsWith('https://')) {
+        toast.error('post_logout_redirect_uris deve usar https://');
+        return;
+      }
+    }
+
     createMutation.mutate({
       name: name.trim(),
       slug: slug.toLowerCase().trim(),
       domain: normalizeDomain(domain),
       baseUrl: baseUrl.trim() || `https://${normalizeDomain(domain)}`,
       active: true,
+      postLogoutRedirectUris,
     });
+  }
+
+  function handleAddRedirect(e: React.FormEvent) {
+    e.preventDefault();
+    const v = redirectInput.trim();
+    if (!v) return;
+    try {
+      const u = new URL(v);
+      if (u.protocol !== 'https:') {
+        toast.error('Somente https:// permitido para post logout redirects');
+        return;
+      }
+      setPostLogoutRedirectUris((s) => Array.from(new Set([...s, v])));
+      setRedirectInput('');
+    } catch {
+      toast.error('URL inválida');
+    }
   }
 
   return (
@@ -114,6 +142,21 @@ export default function AppsClient() {
         <div>
           <label className="block text-sm text-slate-300 mb-1.5">Base URL</label>
           <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://app.zonadev.tech" className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white" />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm text-slate-300 mb-1.5">Post-logout redirect URIs</label>
+          <div className="flex gap-2">
+            <input value={redirectInput} onChange={(e) => setRedirectInput(e.target.value)} placeholder="https://app.zonadev.tech/logout-callback" className="flex-1 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white" />
+            <button onClick={handleAddRedirect} className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm">Adicionar</button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {postLogoutRedirectUris.map((u) => (
+              <div key={u} className="inline-flex items-center gap-2 bg-[#121212] border border-[#2a2a2a] rounded-full px-3 py-1 text-xs text-slate-300">
+                <span className="font-mono">{u}</span>
+                <button type="button" onClick={() => setPostLogoutRedirectUris((s) => s.filter(x => x !== u))} className="text-red-400">✕</button>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="md:col-span-2">
           <button
