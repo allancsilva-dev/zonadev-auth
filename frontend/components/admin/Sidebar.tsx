@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch, handleUnauthorized } from '@/lib/api';
 
@@ -77,6 +77,7 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
 
   function isActive(href: string) {
@@ -86,8 +87,18 @@ export default function Sidebar() {
 
   async function handleLogout() {
     try {
-      await apiFetch('/auth/logout', { method: 'POST' });
-    } finally {
+      const response = await apiFetch('/auth/logout', { method: 'POST' });
+      const data = (await response.json()) as { logoutUrls?: string[] };
+
+      if (data.logoutUrls?.length) {
+        await Promise.allSettled(
+          data.logoutUrls.map((url) => fetch(url, { credentials: 'include' })),
+        );
+      }
+
+      router.push('/login');
+      router.refresh();
+    } catch {
       handleUnauthorized();
     }
   }

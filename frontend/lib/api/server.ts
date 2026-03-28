@@ -1,51 +1,69 @@
-// Usado apenas em Server Components (páginas).
-// Nunca importar em Client Components ('use client').
+// redirect() retorna never — TypeScript já infere string aqui.
+// Alias explícito para deixar a intenção clara.
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export async function serverFetch<T>(path: string): Promise<T> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('admin_access_token')?.value;
+  const API_URL = process.env.API_URL;
+if (!API_URL) {
+  console.error('[serverFetch] API_URL não definido');
+  throw new Error('Configuração inválida do servidor (API_URL ausente)');
+}
 
-  if (!token) {
-    console.error(`[serverFetch] admin_access_token ausente para ${path}`);
+const cookieStore = await cookies();
+const token = cookieStore.get('admin_access_token')?.value;
+
+if (!token || token.split('.').length !== 3) {
+  console.error(`[serverFetch] Token ausente ou inválido | path=${path}`);
+  redirect('/login');
+}
+
+const safeToken = token; // narrowing: garante string após o bloco acima
+
+const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+const url = `${API_URL.replace(/\/$/, '')}${normalizedPath}`;
+
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 5_000);
+
+try {
+  const res = await fetch(url, {
+    cache: 'no-store',
+    signal: controller.signal,
+    headers: { Authorization: `Bearer ${safeToken}` },
+  });
+
+  if (res.status === 401) {
+    console.error(`[serverFetch] 401 Unauthorized | path=${path} url=${url}`);
     redirect('/login');
   }
-
-  const controller = new AbortController();
-  // Timeout de 8s — backend travado não segura a renderização SSR inteira
-  const timeout = setTimeout(() => controller.abort(), 8_000);
-
-  try {
-    const res = await fetch(`${process.env.API_URL}${path}`, {
-      cache: 'no-store', // dados de admin nunca são cacheados pelo Next
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (res.status === 401) redirect('/login');
-
-    if (!res.ok) {
-      throw new Error(`Backend retornou ${res.status} para ${path}`);
-    }
-
-    // Guard contra proxy reverso mal configurado que retorna HTML em vez de JSON
-    const contentType = res.headers.get('content-type');
-    if (!contentType?.includes('application/json')) {
-      throw new Error('Resposta inválida do servidor. Esperado JSON.');
-    }
-
-    return res.json() as Promise<T>;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('O servidor demorou para responder. Tente novamente.');
-    }
-    throw error;
-    // TODO: observability v2 — enviar para Sentry/Datadog antes de relançar
-  } finally {
-    clearTimeout(timeout);
+  if (res.status >= 500) {
+    console.error(`[serverFetch] Backend erro ${res.status} | path=${path} url=${url}`);
+    throw new Error('Backend indisponível. Tente novamente.');
   }
+  if (!res.ok) {
+    console.error(`[serverFetch] Erro ${res.status} | path=${path} url=${url}`);
+    throw new Error(`Erro ${res.status}`);
+  }
+
+  const contentType = res.headers.get('content-type');
+  if (!contentType?.includes('application/json')) {
+    console.error(`[serverFetch] Resposta não-JSON | path=${path} url=${url}`);
+    throw new Error('Resposta inválida do servidor.');
+  }
+
+  return res.json() as Promise<T>;
+} catch (error) {
+  if (error instanceof Error && (error as any).digest?.startsWith('NEXT_REDIRECT')) {
+    throw error;
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    console.error(`[serverFetch] Timeout | path=${path} url=${url}`);
+    throw new Error('O servidor demorou para responder. Tente novamente.');
+  }
+  throw error;
+} finally {
+  clearTimeout(timeout);
+}
 }
