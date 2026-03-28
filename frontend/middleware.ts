@@ -26,6 +26,12 @@ export async function middleware(request: NextRequest) {
 
   // 3. Token válido
   if (token && payload && !isTokenExpired(payload)) {
+    // Validar aud — rejeitar tokens de outros apps
+    const aud = (payload as Record<string, any>)?.aud;
+    if (aud !== APP_AUD) {
+      console.error('[Middleware] Token com aud incorreto:', aud);
+      return clearTokenAndContinue();
+    }
     // 🔴 CORREÇÃO: sair do login se já autenticado
     if (pathname === '/login') {
       return NextResponse.redirect(new URL('/admin', request.url));
