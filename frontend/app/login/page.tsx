@@ -16,6 +16,19 @@ function getErrorMessage(status: number): string {
   return 'Erro ao conectar com o servidor. Tente novamente';
 }
 
+// Validar que redirect pertence ao domínio zonadev.tech
+// Paths relativos são considerados seguros
+function safeRedirect(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('/')) return url;
+  try {
+    const u = new URL(url);
+    return u.hostname === 'zonadev.tech' || u.hostname.endsWith('.zonadev.tech') ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -29,10 +42,22 @@ export default function LoginPage() {
     setRedirect(getQueryParam('redirect'));
   }, []);
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Ler aud e redirect DIRETAMENTE da URL no momento do submit
+    const params = new URLSearchParams(window.location.search);
+    const currentAud = params.get('aud') || params.get('app') || 'auth.zonadev.tech';
+    const currentRedirect = params.get('redirect');
+
+    // Formato mínimo do aud (deve ser domínio: conter pelo menos um ponto)
+    if (!currentAud || !currentAud.includes('.')) {
+      setError('Aplicação inválida. Contacte o administrador.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
@@ -42,36 +67,28 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password,
-          aud: aud || getQueryParam('app') || 'renowa.zonadev.tech',
-          redirect: redirect || undefined,
+          aud: currentAud,
+          redirect: currentRedirect || undefined,
         }),
       });
 
       if (!res.ok) {
-        setError(getErrorMessage(res.status));
+        const data = await res.json().catch(() => null);
+        setError(data?.message || getErrorMessage(res.status));
         return;
       }
 
       const data = await res.json();
-      const isSafeRedirect = (url: string): boolean => {
-        if (url.startsWith('/')) return true;
-        try {
-          const { protocol, hostname } = new URL(url);
-          return protocol === 'https:' && (hostname === 'zonadev.tech' || hostname.endsWith('.zonadev.tech'));
-        } catch {
-          return false;
-        }
-      };
-      const target = data.redirect && isSafeRedirect(data.redirect)
-        ? data.redirect
-        : (redirect && isSafeRedirect(redirect) ? redirect : '/admin');
+
+      // Prioridade: backend redirect > URL redirect (validado) > fallback /admin
+      const target = data.redirect || safeRedirect(currentRedirect) || '/admin';
       window.location.href = target;
     } catch {
-      setError('Erro de conexão. Verifique sua internet e tente novamente');
+      setError('Erro de conexão. Verifique sua internet e tente novamente.');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">

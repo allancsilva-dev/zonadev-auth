@@ -275,7 +275,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    const app = this.appCacheService.getAppByAudience(dto.aud);
+    const app = await this.appCacheService.getByAudience(dto.aud);
     if (!app) {
       await this.audit(AuditAction.LOGIN_FAILED, ip, userAgent, user.id, user.tenantId ?? undefined);
       throw new UnauthorizedException('Aplicacao nao autorizada');

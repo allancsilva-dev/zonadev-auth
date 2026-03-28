@@ -13,6 +13,7 @@ export class AppCacheService implements OnModuleInit {
   private expiresAt = 0;
   private readonly ttlMs = 60_000;
   private reloadingPromise: Promise<void> | null = null;
+  private loadingPromise: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(App)
@@ -41,13 +42,19 @@ export class AppCacheService implements OnModuleInit {
 
   async getByAudience(aud: string): Promise<App | undefined> {
     if (Date.now() > this.expiresAt) {
-      await this.reloadFromDatabase();
+      if (!this.loadingPromise) {
+        this.loadingPromise = this.reloadFromDatabase()
+          .catch((err) => {
+            this.logger.error('[AppCache] Reload failed', err?.message ?? err);
+            // keep existing cache if reload fails
+          })
+          .finally(() => {
+            this.loadingPromise = null;
+          });
+      }
+      await this.loadingPromise;
     }
 
-    return this.cacheByAudience.get(this.normalize(aud));
-  }
-
-  getAppByAudience(aud: string): App | undefined {
     return this.cacheByAudience.get(this.normalize(aud));
   }
 
