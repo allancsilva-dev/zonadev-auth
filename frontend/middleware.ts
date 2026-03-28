@@ -7,6 +7,11 @@ const AUTH_API_URL = process.env.API_URL;
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const sid = request.cookies.get('zonadev_sid')?.value;
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname === '/login' && !sid) {
+    return NextResponse.next();
+  }
 
   // Decode único — evita retrabalho
   const payload = token ? decodeJwtPayload(token) : null;
@@ -156,5 +161,5 @@ function isTokenExpired(payload: Record<string, unknown>): boolean {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/((?!_next|favicon.ico|api).*)'],
 };
