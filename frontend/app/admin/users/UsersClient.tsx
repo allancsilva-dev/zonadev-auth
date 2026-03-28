@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -87,7 +88,9 @@ export default function UsersClient() {
   };
 
   const columns: Column<User>[] = [
-    { key: 'email', label: 'E-mail', render: row => <span className="font-mono text-xs text-slate-200">{row.email}</span> },
+    { key: 'email', label: 'E-mail', render: row => (
+      <Link href={`/admin/users/${row.id}`} className="text-indigo-400 hover:text-indigo-300 hover:underline font-mono text-xs">{row.email}</Link>
+    ) },
     { key: 'tenant', label: 'Tenant', render: row => row.tenant?.name ?? <span className="text-slate-500">—</span> },
     { key: 'role', label: 'Role', render: row => roleBadge(row.role) },
     { key: 'active', label: 'Status', render: row => <StatusBadge status={row.active} /> },
@@ -102,12 +105,15 @@ export default function UsersClient() {
     {
       key: 'actions', label: 'Ações',
       render: row => row.active ? (
-        <button
-          onClick={() => handleDeactivate(row.id)}
-          className="text-xs text-red-400 hover:text-red-300 transition-colors"
-        >
-          Desativar
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href={`/admin/users/${row.id}`} className="text-indigo-400 hover:text-indigo-300 text-sm">Gerir</Link>
+          <button
+            onClick={() => handleDeactivate(row.id)}
+            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+          >
+            Desativar
+          </button>
+        </div>
       ) : <span className="text-slate-600 text-xs">—</span>,
     },
   ];
