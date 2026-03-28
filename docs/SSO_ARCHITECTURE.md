@@ -1,21 +1,84 @@
-# ZonaDev SSO — Arquitetura para Novos Apps
+# ZonaDev SSO - Arquitetura para Novos Apps
 
-## Visão geral
-
-O Auth (auth.zonadev.tech) é o único provedor de identidade.
-Nenhum app gerencia senha, sessão ou emite JWT — isso é exclusivo do Auth.
-
-Fluxo obrigatório para qualquer novo app:
+## Modelo SSO ZonaDev
 
 ```text
-1. Usuário acessa novo-app.zonadev.tech
-2. Sem token válido → redireciona para auth.zonadev.tech/login?app=APP_AUD&redirect=URL
-3. Usuário faz login no Auth
-4. Auth cria sessão → seta cookie zonadev_sid (Domain=.zonadev.tech)
-5. Auth redireciona de volta para o app
-6. Middleware do app chama GET auth.zonadev.tech/oauth/token?aud=APP_AUD
-7. Auth valida zonadev_sid → emite JWT (aud=APP_AUD, 15min)
-8. Middleware seta cookie local (httpOnly, Domain=novo-app.zonadev.tech)
-9. App usa JWT para chamar seu próprio backend
-10. Backend valida JWT via JWKS (auth.zonadev.tech/.well-known/jwks.json)
+SSO centralizado com sessão única (zonadev_sid)
+Tokens locais por aplicação (access_token por subdomínio)
+```
+
+## Fluxo oficial
+
+```text
+1. Usuário faz login -> backend cria zonadev_sid
+2. Browser armazena cookie (.zonadev.tech)
+
+3. Usuário acessa app (ERP/Auth/etc)
+
+4. Middleware:
+	- lê zonadev_sid
+	- chama /oauth/token?aud=APP_AUD
+	- recebe access_token
+	- seta cookie local (app-specific)
+
+5. Middleware REDIRECT (obrigatório)
+
+6. Novo request:
+	- cookie local presente
+	- SSR usa token
+	- backend responde 200
+```
+
+## Regra crítica (SSR)
+
+```text
+Cookies setados no middleware NÃO estão disponíveis no mesmo request.
+
+Sempre forçar redirect após token exchange.
+```
+
+## Política de cookies
+
+| Cookie | Domínio | Uso |
+| --- | --- | --- |
+| zonadev_sid | .zonadev.tech | sessão global |
+| admin_access_token | auth.zonadev.tech | Auth |
+| erp_access_token | erp.zonadev.tech | ERP |
+| renowa_access_token | renowa.zonadev.tech | Renowa |
+
+## Configuração por app (.env)
+
+```env
+APP_AUD=auth.zonadev.tech
+COOKIE_NAME=admin_access_token
+COOKIE_DOMAIN=auth.zonadev.tech
+```
+
+## Docker (runtime obrigatório)
+
+```yaml
+environment:
+  - APP_AUD=auth.zonadev.tech
+  - COOKIE_NAME=admin_access_token
+  - COOKIE_DOMAIN=auth.zonadev.tech
+```
+
+## Erros proibidos
+
+```text
+- Hardcode de domínio no código
+- Usar NEXT_PUBLIC_ para cookie/auth
+- Compartilhar access_token entre apps
+- Tentar usar cookie no mesmo request SSR
+```
+
+## Checklist novo app
+
+```text
+[ ] Definir APP_AUD único
+[ ] Definir COOKIE_NAME único
+[ ] Definir COOKIE_DOMAIN correto
+[ ] Implementar middleware com redirect pós-token
+[ ] Implementar local-logout
+[ ] Validar SSO com Auth + ERP
 ```

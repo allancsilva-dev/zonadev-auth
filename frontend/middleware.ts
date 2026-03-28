@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
           access_token: string;
           expires_in: number;
         };
-        const response = NextResponse.next();
+        const response = NextResponse.redirect(request.url);
         response.cookies.set(COOKIE_NAME, data.access_token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
