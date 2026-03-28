@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { apiFetch, handleUnauthorized } from '@/lib/api';
+import { handleUnauthorized } from '@/lib/api';
 
 interface NavItem {
   href: string;
@@ -87,17 +87,18 @@ export default function Sidebar() {
 
   async function handleLogout() {
     try {
-      const response = await apiFetch('/auth/logout', { method: 'POST' });
-      const data = (await response.json()) as { logoutUrls?: string[] };
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      const data = (await res.json()) as { logoutUrls?: string[] };
 
       if (data.logoutUrls?.length) {
         await Promise.allSettled(
-          data.logoutUrls.map((url) => fetch(url, { credentials: 'include' })),
+          data.logoutUrls.map((url: string) =>
+            fetch(url, { credentials: 'include' })
+          )
         );
       }
 
       router.push('/login');
-      router.refresh();
     } catch {
       handleUnauthorized();
     }

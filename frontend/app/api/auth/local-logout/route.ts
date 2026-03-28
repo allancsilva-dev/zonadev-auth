@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const COOKIE_NAME = 'admin_access_token';
+const COOKIE_NAME = process.env.NEXT_PUBLIC_COOKIE_NAME ?? 'admin_access_token';
 
 function getCookieDomain(): string | undefined {
-  return process.env.NODE_ENV === 'production'
-    ? 'erp.zonadev.tech'
-    : undefined;
+  if (process.env.NODE_ENV !== 'production') return undefined;
+  return process.env.NEXT_PUBLIC_COOKIE_DOMAIN;
 }
 
 function buildCorsHeaders(request: NextRequest): HeadersInit {
