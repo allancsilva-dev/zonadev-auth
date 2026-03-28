@@ -144,6 +144,9 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      APP_AUD: auth.zonadev.tech
+      COOKIE_NAME: admin_access_token
+      COOKIE_DOMAIN: auth.zonadev.tech
       # URL interna — Server Components chamam o backend directamente pela rede Docker.
       # Nunca usar o domínio público aqui (evita roundtrip desnecessário pelo nginx).
       API_URL: http://zonadev-auth-backend:3001

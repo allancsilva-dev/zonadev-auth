@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const APP_AUD = process.env.NEXT_PUBLIC_APP_AUD ?? 'auth.zonadev.tech';
-const COOKIE_NAME = process.env.NEXT_PUBLIC_COOKIE_NAME ?? 'admin_access_token';
+const APP_AUD = process.env.APP_AUD ?? 'auth.zonadev.tech';
+const COOKIE_NAME = process.env.COOKIE_NAME ?? 'admin_access_token';
 const AUTH_API_URL = process.env.API_URL;
 
 export async function middleware(request: NextRequest) {
@@ -119,7 +119,7 @@ function redirectToLogin(request: NextRequest): NextResponse {
 
 function getCookieDomain(): string | undefined {
   if (process.env.NODE_ENV !== 'production') return undefined;
-  return process.env.NEXT_PUBLIC_COOKIE_DOMAIN;
+  return process.env.COOKIE_DOMAIN;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
