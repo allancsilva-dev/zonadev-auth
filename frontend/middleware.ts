@@ -119,9 +119,9 @@ function clearTokenAndContinue(): NextResponse {
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
-  const loginUrl = new URL('/login', request.url);
+  const loginUrl = new URL('/login', 'https://auth.zonadev.tech');
   loginUrl.searchParams.set('app', APP_AUD);
-  loginUrl.searchParams.set('redirect', request.url);
+  loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
   return NextResponse.redirect(loginUrl);
 }
 
