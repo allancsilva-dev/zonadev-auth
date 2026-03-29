@@ -86,22 +86,9 @@ export default function Sidebar() {
   }
 
   async function handleLogout() {
-    try {
-      const res = await fetch('/api/auth/logout', { method: 'POST' });
-      const data = (await res.json()) as { logoutUrls?: string[] };
-
-      if (data.logoutUrls?.length) {
-        await Promise.allSettled(
-          data.logoutUrls.map((url: string) =>
-            fetch(url, { credentials: 'include' })
-          )
-        );
-      }
-
-      router.push('/login');
-    } catch {
-      handleUnauthorized();
-    }
+    // Redirect to the server-side logout route which revokes session
+    // and clears cookies, then redirects to login.
+    window.location.href = '/logout';
   }
 
   const userRoles = user.roles?.length ? user.roles : [user.role];
