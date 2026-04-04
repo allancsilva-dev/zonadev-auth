@@ -6,6 +6,7 @@ import { ClientsService } from './clients/clients.service';
 import { UserSession } from './sessions/user-session.entity';
 import { UserSessionsService } from './sessions/user-sessions.service';
 import { AuthorizationGrant } from './grants/authorization-grant.entity';
+import { GrantsService } from './grants/grants.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Client, ClientRedirectUri])],
@@ -23,7 +24,7 @@ export class SessionsModule {}
 
 @Module({
   imports: [TypeOrmModule.forFeature([AuthorizationGrant])],
-  providers: [],
-  exports: [TypeOrmModule],
+  providers: [GrantsService],
+  exports: [GrantsService, TypeOrmModule],
 })
 export class GrantsModule {}

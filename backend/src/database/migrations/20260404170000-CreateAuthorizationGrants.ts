@@ -12,8 +12,7 @@ export class CreateAuthorizationGrants20260404170000 implements MigrationInterfa
         scopes JSONB NOT NULL DEFAULT '[]',
         revoked_at TIMESTAMPTZ,
         granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT uq_grants_user_client UNIQUE (user_id, client_id)
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
 
@@ -23,7 +22,7 @@ export class CreateAuthorizationGrants20260404170000 implements MigrationInterfa
     `);
 
     await queryRunner.query(`
-      CREATE INDEX idx_grants_active
+      CREATE UNIQUE INDEX uq_grants_active
       ON authorization_grants(user_id, client_id)
       WHERE revoked_at IS NULL
     `);
