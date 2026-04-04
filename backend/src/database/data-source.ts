@@ -9,6 +9,10 @@ import { AuditLog } from '../entities/audit-log.entity';
 import { App } from '../entities/app.entity';
 import { Session } from '../entities/session.entity';
 import { UserAppAccess } from '../entities/user-app-access.entity';
+import { Client } from '../clients/client.entity';
+import { ClientRedirectUri } from '../clients/client-redirect-uri.entity';
+import { AuthorizationGrant } from '../grants/authorization-grant.entity';
+import { UserSession } from '../sessions/user-session.entity';
 
 dotenv.config();
 
@@ -25,6 +29,10 @@ export const AppDataSource = new DataSource({
     App,
     Session,
     UserAppAccess,
+    Client,
+    ClientRedirectUri,
+    AuthorizationGrant,
+    UserSession,
   ],
   migrations: [
     process.env.NODE_ENV === 'production'
