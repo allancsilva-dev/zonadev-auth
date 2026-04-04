@@ -102,6 +102,7 @@ services:
       ALLOWED_AUDIENCES: ${ALLOWED_AUDIENCES}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       DOMAIN: ${DOMAIN:-zonadev.tech}
+      AUTH_BASE_URL: https://auth.zonadev.tech
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USER: ${MAIL_USER}
