@@ -1,15 +1,26 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import type Redis from 'ioredis';
+import * as bcryptjs from 'bcryptjs';
 import { REDIS_CLIENT } from '../modules/redis/redis.constants';
 import { ClientsService } from '../clients/clients.service';
 import { UserSessionsService } from '../sessions/user-sessions.service';
 import { GrantsService } from '../grants/grants.service';
 import {
   AuthorizeQuery,
+  AccessTokenClaims,
   AuthorizationCodePayload,
   ResumePayload,
+  TokenBody,
+  TokenResponse,
 } from './dto/authorize.dto';
-import { generateAuthorizationCode, generateResumeId } from './pkce.util';
+import {
+  generateAuthorizationCode,
+  generateJti,
+  generateResumeId,
+  validateCodeVerifierFormat,
+  validatePkce,
+} from './pkce.util';
 import { OidcError } from '../common/oidc-errors';
 import { Client } from '../clients/client.entity';
 
@@ -23,6 +34,7 @@ export class OAuthService {
     private readonly clientsService: ClientsService,
     private readonly sessionsService: UserSessionsService,
     private readonly grantsService: GrantsService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async authorize(
@@ -133,6 +145,110 @@ export class OAuthService {
     return this.issueAuthorizationCode(query, session, client, meta);
   }
 
+  async issueToken(body: TokenBody): Promise<TokenResponse> {
+    if (body.grant_type !== 'authorization_code') {
+      throw new BadRequestException(
+        OidcError.invalidGrant('grant_type deve ser "authorization_code"'),
+      );
+    }
+
+    if (!body.code || !body.redirect_uri || !body.client_id || !body.code_verifier) {
+      throw new BadRequestException(
+        OidcError.invalidRequest(
+          'Campos obrigatórios ausentes: code, redirect_uri, client_id, code_verifier',
+        ),
+      );
+    }
+
+    if (!validateCodeVerifierFormat(body.code_verifier)) {
+      throw new BadRequestException(
+        OidcError.invalidRequest('code_verifier com formato inválido'),
+      );
+    }
+
+    const codeKey = `auth:code:${body.code}`;
+    const raw = await this.redis.get(codeKey);
+
+    if (!raw) {
+      throw new BadRequestException(
+        OidcError.invalidGrant('authorization_code inválido ou expirado'),
+      );
+    }
+
+    let codePayload: AuthorizationCodePayload;
+    try {
+      codePayload = JSON.parse(raw) as AuthorizationCodePayload;
+    } catch {
+      await this.redis.del(codeKey);
+      throw new BadRequestException(
+        OidcError.invalidGrant('authorization_code corrompido'),
+      );
+    }
+
+    const client = await this.clientsService.validateClient(
+      body.client_id,
+      codePayload.tenantId,
+    );
+
+    if (client.id !== codePayload.clientId) {
+      throw new UnauthorizedException(
+        OidcError.invalidGrant('client_id não corresponde ao code'),
+      );
+    }
+
+    if (body.redirect_uri !== codePayload.redirectUri) {
+      throw new BadRequestException(
+        OidcError.invalidGrant('redirect_uri não corresponde ao code'),
+      );
+    }
+
+    if (!validatePkce(body.code_verifier, codePayload.codeChallenge)) {
+      throw new BadRequestException(
+        OidcError.invalidGrant('code_verifier inválido'),
+      );
+    }
+
+    if (client.clientSecretHash) {
+      if (!body.client_secret) {
+        throw new UnauthorizedException(
+          OidcError.invalidClient('client_secret obrigatório para este client'),
+        );
+      }
+
+      const secretValid = await bcryptjs.compare(body.client_secret, client.clientSecretHash);
+      if (!secretValid) {
+        throw new UnauthorizedException(
+          OidcError.invalidClient('client_secret inválido'),
+        );
+      }
+    }
+
+    await this.redis.del(codeKey);
+
+    const now = Math.floor(Date.now() / 1000);
+    const claims: AccessTokenClaims = {
+      sub: codePayload.userId,
+      iss: process.env.JWT_ISSUER ?? 'https://auth.zonadev.tech',
+      aud: body.client_id,
+      azp: body.client_id,
+      scope: codePayload.scopes.join(' '),
+      tenantId: codePayload.tenantId,
+      jti: generateJti(),
+      iat: now,
+      nbf: now,
+      exp: now + client.accessTokenTtl,
+    };
+
+    const accessToken = this.signToken(claims);
+
+    return {
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: client.accessTokenTtl,
+      scope: claims.scope,
+    };
+  }
+
   private async issueAuthorizationCode(
     query: AuthorizeQuery,
     session: { userId: string; tenantId: string },
@@ -170,5 +286,26 @@ export class OAuthService {
     callbackUrl.searchParams.set('state', query.state);
 
     return { redirectTo: callbackUrl.toString() };
+  }
+
+  private signToken(claims: AccessTokenClaims): string {
+    const kid = process.env.JWT_KID ?? 'zonadev-default';
+
+    return this.jwtService.sign(
+      {
+        sub: claims.sub,
+        iss: claims.iss,
+        aud: claims.aud,
+        azp: claims.azp,
+        scope: claims.scope,
+        tenantId: claims.tenantId,
+        jti: claims.jti,
+      },
+      {
+        algorithm: 'RS256',
+        expiresIn: `${claims.exp - claims.iat}s`,
+        header: { kid, alg: 'RS256' },
+      },
+    );
   }
 }

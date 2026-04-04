@@ -1,7 +1,7 @@
-import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { OAuthService } from './oauth.service';
-import { AuthorizeQuery } from './dto/authorize.dto';
+import { AuthorizeQuery, TokenBody, TokenResponse } from './dto/authorize.dto';
 import { OidcError } from '../common/oidc-errors';
 
 function extractSession(req: Request): { userId: string; tenantId: string } | null {
@@ -100,5 +100,11 @@ export class OAuthController {
 
     const { redirectTo } = await this.oauthService.resume(resumeId, session, meta);
     res.redirect(redirectTo);
+  }
+
+  @Post('token')
+  @HttpCode(HttpStatus.OK)
+  async token(@Body() body: TokenBody): Promise<TokenResponse> {
+    return this.oauthService.issueToken(body);
   }
 }
