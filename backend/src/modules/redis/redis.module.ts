@@ -23,27 +23,33 @@ class RedisClientProvider implements OnModuleDestroy {
       provide: REDIS_CLIENT,
       useFactory: () => {
         const logger = new Logger('RedisModule');
-
+        const redisUrl = process.env.REDIS_URL?.trim();
         const rawPort = Number(process.env.REDIS_PORT);
         const port = rawPort > 0 ? rawPort : 6379;
         const password = process.env.REDIS_PASSWORD || undefined;
-
-        const client = new Redis({
-          host: process.env.REDIS_HOST ?? 'redis',
-          port,
-          password,
-          tls: process.env.REDIS_TLS === 'true' ? ({} as ConnectionOptions) : undefined,
-          maxRetriesPerRequest: 3,
+        const baseOptions = {
+          commandTimeout: 1000,
+          maxRetriesPerRequest: 2,
           enableReadyCheck: true,
-          lazyConnect: false,
+          lazyConnect: true,
           enableOfflineQueue: false,
           retryStrategy(times: number) {
-            if (times > 10) {
+            if (times > 2) {
               return null;
             }
-            return Math.min(times * 100, 2000);
+            return Math.min(times * 100, 500);
           },
-        });
+        };
+
+        const client = redisUrl
+          ? new Redis(redisUrl, baseOptions)
+          : new Redis({
+              host: process.env.REDIS_HOST ?? 'redis',
+              port,
+              password,
+              tls: process.env.REDIS_TLS === 'true' ? ({} as ConnectionOptions) : undefined,
+              ...baseOptions,
+            });
 
         client.on('ready', () => logger.log('Redis pronto'));
         client.on('reconnecting', () => logger.warn('Redis reconectando...'));

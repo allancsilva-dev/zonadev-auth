@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPostLogoutRedirectUris implements MigrationInterface {
+export class AddPostLogoutRedirectUris20260404121500 implements MigrationInterface {
+  name = 'AddPostLogoutRedirectUris20260404121500';
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`ALTER TABLE "apps" ADD COLUMN IF NOT EXISTS "post_logout_redirect_uris" text[]`);
   }

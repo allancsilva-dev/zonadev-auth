@@ -7,7 +7,32 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AppCacheService } from './modules/app/app-cache.service';
 
+const REQUIRED_ENV = [
+  'DATABASE_URL',
+  'JWT_PRIVATE_KEY_PATH',
+  'JWT_PUBLIC_KEY_PATH',
+  'JWT_ISSUER',
+];
+
+function getMissingStartupEnv(): string[] {
+  const missing = REQUIRED_ENV.filter((key) => !process.env[key]?.trim());
+  const hasRedisUrl = Boolean(process.env.REDIS_URL?.trim());
+  const hasRedisHostPort = Boolean(process.env.REDIS_HOST?.trim()) && Boolean(process.env.REDIS_PORT?.trim());
+
+  if (!hasRedisUrl && !hasRedisHostPort) {
+    missing.push('REDIS_URL ou REDIS_HOST/REDIS_PORT');
+  }
+
+  return missing;
+}
+
 async function bootstrap() {
+  const missing = getMissingStartupEnv();
+  if (missing.length > 0) {
+    console.error(`[Startup] Variáveis obrigatórias ausentes: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Confia no primeiro proxy reverso (Nginx) para propagação de IP real.
