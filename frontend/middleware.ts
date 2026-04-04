@@ -164,5 +164,5 @@ function isTokenExpired(payload: Record<string, unknown>): boolean {
 }
 
 export const config = {
-  matcher: ['/((?!_next|favicon.ico|api|health|login|logout).*)'],
+  matcher: ['/((?!_next|favicon.ico|api|health|login|logout|oauth).*)'],
 };
