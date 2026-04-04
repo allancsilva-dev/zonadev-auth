@@ -94,7 +94,7 @@ export class createAppsSessionsUserAppAccess20260317090000 implements MigrationI
       SELECT u.id, a.id, 'admin', 'active'
       FROM users u
       JOIN apps a ON a.slug = 'admin'
-      WHERE u.roles @> ARRAY['SUPERADMIN']
+      WHERE u.role = 'SUPERADMIN'
       ON CONFLICT (user_id, app_id) DO NOTHING
     `);
 
