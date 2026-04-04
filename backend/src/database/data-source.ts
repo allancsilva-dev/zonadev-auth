@@ -26,7 +26,11 @@ export const AppDataSource = new DataSource({
     Session,
     UserAppAccess,
   ],
-  migrations: ['src/database/migrations/*.ts'],
+  migrations: [
+    process.env.NODE_ENV === 'production'
+      ? 'dist/database/migrations/*.js'
+      : 'src/database/migrations/*.ts',
+  ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
 });
