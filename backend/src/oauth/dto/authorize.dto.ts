@@ -1,11 +1,29 @@
-export interface AuthorizeQuery {
+import { IsIn, IsOptional, IsString } from 'class-validator';
+
+export class AuthorizeQuery {
+  @IsString()
   client_id: string;
+
+  @IsString()
   redirect_uri: string;
+
+  @IsIn(['code'])
   response_type: string;
+
+  @IsString()
   scope: string;
+
+  @IsString()
   state: string;
+
+  @IsString()
   code_challenge: string;
+
+  @IsIn(['S256'])
   code_challenge_method: string;
+
+  @IsOptional()
+  @IsString()
   nonce?: string;
 }
 
@@ -34,12 +52,24 @@ export interface ResumePayload {
   createdAt: number;
 }
 
-export interface TokenBody {
+export class TokenBody {
+  @IsIn(['authorization_code'])
   grant_type: string;
+
+  @IsString()
   code: string;
+
+  @IsString()
   redirect_uri: string;
+
+  @IsString()
   client_id: string;
+
+  @IsOptional()
+  @IsString()
   client_secret?: string;
+
+  @IsString()
   code_verifier: string;
 }
 
