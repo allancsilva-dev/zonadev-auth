@@ -36,10 +36,12 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false);
   const [aud, setAud]           = useState('');
   const [redirect, setRedirect] = useState('');
+  const [resume, setResume]     = useState('');
 
   useEffect(() => {
     setAud(getQueryParam('aud') || getQueryParam('app'));
     setRedirect(getQueryParam('redirect'));
+    setResume(getQueryParam('resume'));
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -51,9 +53,10 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const currentAud = params.get('aud') || params.get('app') || 'auth.zonadev.tech';
     const currentRedirect = params.get('redirect');
+    const currentResume = params.get('resume');
 
     // Formato mínimo do aud (deve ser domínio: conter pelo menos um ponto)
-    if (!currentAud || !currentAud.includes('.')) {
+    if (!currentResume && (!currentAud || !currentAud.includes('.'))) {
       setError('Aplicação inválida. Contacte o administrador.');
       setLoading(false);
       return;
@@ -80,6 +83,11 @@ export default function LoginPage() {
 
       const data = await res.json();
 
+      if (currentResume) {
+        window.location.href = `/oauth/authorize/resume?resume=${encodeURIComponent(currentResume)}`;
+        return;
+      }
+
       // Prioridade: backend redirect > URL redirect (validado) > fallback /admin
       const target = data.redirect || safeRedirect(currentRedirect) || '/admin';
       window.location.href = target;
@@ -103,6 +111,9 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">ZonaDev Auth</h1>
           <p className="text-zinc-400 text-sm mt-1">Provedor de identidade centralizado</p>
+          {resume && (
+            <p className="text-indigo-400 text-xs mt-2">Continue para autorizar a aplicação</p>
+          )}
         </div>
 
         {/* Card */}

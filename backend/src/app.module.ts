@@ -15,6 +15,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AppCacheModule } from './modules/app/app-cache.module';
 import { CleanupJob } from './jobs/cleanup.job';
 import { ClientsModule, SessionsModule, GrantsModule } from './oidc.modules';
+import { OAuthModule } from './oauth/oauth.module';
 
 import { Tenant } from './entities/tenant.entity';
 import { User } from './entities/user.entity';
@@ -85,6 +86,7 @@ import { LocalUser } from './entities/local-user.entity';
     ClientsModule,
     SessionsModule,
     GrantsModule,
+    OAuthModule,
 
     // CleanupJob precisa de acesso às sessões/tokens
     TypeOrmModule.forFeature([RefreshToken, Session]),
